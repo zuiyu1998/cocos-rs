@@ -1,27 +1,28 @@
 use crate::gfx_base::{PassBarrierPair, Rect, Viewport};
 
 use super::{
-    DynRenderFn, Handle, Id, PassInsertPoint, StringHandle,
+    DynRenderFn, FrameGraph, PassInsertPoint, StringHandle,
     render_target_attachment::RenderTargetAttachment,
 };
 
 pub struct PassNode {
     pass: Option<Box<DynRenderFn>>,
-    reads: Vec<Handle>,
-    writes: Vec<Handle>,
-    attachments: Vec<RenderTargetAttachment>,
-    resource_request_array: Vec<Handle>,
-    resource_release_array: Vec<Handle>,
+    //指向读取的资源节点索引
+    pub reads: Vec<usize>,
+    pub writes: Vec<usize>,
+    pub attachments: Vec<RenderTargetAttachment>,
+    pub resource_request_array: Vec<usize>,
+    pub resource_release_array: Vec<usize>,
     name: StringHandle,
-    ref_countt: u32,
-    next_pass_node_handle: Option<Handle>,
-    head_pass_node_handle: Option<Handle>,
-    distance_to_headad: u16,
+    pub ref_count: u32,
+    pub next_pass_node_handle: Option<usize>,
+    pub head_pass_node_handle: Option<usize>,
+    pub distance_to_headad: u16,
     used_render_target_slot_mask: u16,
-    id: Id,
-    device_pass_id: Id,
-    insert_point: PassInsertPoint,
-    side_effect: bool,
+    pub id: usize,
+    device_pass_id: usize,
+    pub insert_point: PassInsertPoint,
+    pub side_effect: bool,
     subpass: bool,
     subpass_end: bool,
     has_cleared_attachment: bool,
@@ -33,10 +34,54 @@ pub struct PassNode {
 }
 
 impl PassNode {
+    pub fn can_merge(&self, graph: &FrameGraph, pass_node: &PassNode) -> bool {
+        let attachment_count = self.attachments.len();
+
+        if self.has_cleared_attachment || attachment_count != pass_node.attachments.len() {
+            return false;
+        }
+
+        for i in 0..attachment_count {
+            let attachment_a = &self.attachments[i];
+            let attachment_b = &pass_node.attachments[i];
+
+            if attachment_a.desc.usage != attachment_b.desc.usage
+                || attachment_a.desc.slot != attachment_b.desc.slot
+                || attachment_a.desc.write_mask != attachment_b.desc.write_mask
+                || attachment_a.level != attachment_b.level
+                || attachment_a.layer != attachment_b.layer
+                || attachment_a.index != attachment_b.index
+                || graph
+                    .get_resource_node(attachment_a.texture_handle.index)
+                    .virtual_resource_id
+                    != graph
+                        .get_resource_node(attachment_b.texture_handle.index)
+                        .virtual_resource_id
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn get_render_target_attachment(
+        &self,
+        graph: &FrameGraph,
+        virtual_resource_id: usize,
+    ) -> Option<&RenderTargetAttachment> {
+        self.attachments.iter().find(|attachment| {
+            graph
+                .get_resource_node(attachment.texture_handle.index)
+                .virtual_resource_id
+                == virtual_resource_id
+        })
+    }
+
     pub fn new(
         insert_point: PassInsertPoint,
         name: StringHandle,
-        id: Id,
+        id: usize,
         pass: Box<DynRenderFn>,
     ) -> Self {
         Self {
@@ -47,7 +92,7 @@ impl PassNode {
             resource_request_array: vec![],
             resource_release_array: vec![],
             name,
-            ref_countt: 0,
+            ref_count: 0,
             head_pass_node_handle: None,
             next_pass_node_handle: None,
             distance_to_headad: 0,
