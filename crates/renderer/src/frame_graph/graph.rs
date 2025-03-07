@@ -1,17 +1,19 @@
+use super::pass::PassNode;
+use crate::{RendererError, utils::IndexHandle};
 use std::marker::PhantomData;
 
-use crate::utils::IndexHandle;
-
-type StringHandle = IndexHandle<String, u32>;
-type Id = u16;
+pub type StringHandle = IndexHandle<String, u32>;
+pub type Id = u16;
+pub type Handle = u16;
+pub type PassInsertPoint = u16;
 
 pub struct TypedHandle<ResourceType> {
-    index: u16,
+    index: Handle,
     _marker: PhantomData<ResourceType>,
 }
 
 impl<ResourceType> TypedHandle<ResourceType> {
-    fn new(index: u16) -> Self {
+    fn new(index: Handle) -> Self {
         Self {
             index,
             _marker: Default::default(),
@@ -23,6 +25,7 @@ impl<ResourceType> TypedHandle<ResourceType> {
 pub struct FrameGraph {
     virtual_resources: Vec<Box<dyn VirtualResource>>,
     resource_nodes: Vec<ResourceNode>,
+    pass_nodes: Vec<PassNode>,
 }
 
 impl FrameGraph {
@@ -39,10 +42,10 @@ impl FrameGraph {
 
         let index = self.create_resource_node(virtual_resource);
 
-        TypedHandle::new(index as u16)
+        TypedHandle::new(index)
     }
 
-    pub fn create_resource_node(&mut self, virtual_resource: Box<dyn VirtualResource>) -> usize {
+    pub fn create_resource_node(&mut self, virtual_resource: Box<dyn VirtualResource>) -> Handle {
         let id = virtual_resource.get_id();
         let version = virtual_resource.get_version();
         self.virtual_resources.push(virtual_resource);
@@ -54,7 +57,7 @@ impl FrameGraph {
             version,
         });
 
-        index
+        index as Handle
     }
 }
 
@@ -169,7 +172,7 @@ where
 
 pub trait GFXObject {}
 
-pub struct PassNode {}
+pub type DynRenderFn = dyn FnOnce() -> Result<(), RendererError>;
 
 ///资源节点？
 pub trait VirtualResource: GFXObject {
