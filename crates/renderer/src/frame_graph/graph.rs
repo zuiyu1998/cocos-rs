@@ -1,65 +1,231 @@
 use super::{
     FrameResource, FrameResourceDescriptor, TypeEquals,
+    handle::TypedHandle,
     pass::PassNode,
+    pass_node_builder::PassNodeBuilder,
     virtual_resources::{ResourceEntry, VirtualResource},
 };
-use crate::{RendererError, gfx_base::LoadOp, utils::IndexHandle};
-use std::marker::PhantomData;
+use crate::{
+    RendererError,
+    gfx_base::{LoadOp, StoreOp},
+    utils::IndexHandle,
+};
+use std::mem::swap;
 
 pub type StringHandle = IndexHandle<String, u32>;
 pub type PassInsertPoint = u16;
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct TypedHandle<ResourceType> {
-    pub index: usize,
-    _marker: PhantomData<ResourceType>,
-}
-
-impl<ResourceType: Ord> Ord for TypedHandle<ResourceType> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.index.cmp(&other.index)
-    }
-}
-
-impl<ResourceType: PartialEq> PartialOrd for TypedHandle<ResourceType> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.index.partial_cmp(&other.index)
-    }
-}
-
-impl<ResourceType> TypedHandle<ResourceType> {
-    const INVALID: usize = usize::MAX;
-}
-
-impl<ResourceType> Default for TypedHandle<ResourceType> {
-    fn default() -> Self {
-        Self {
-            index: Self::INVALID,
-            _marker: Default::default(),
-        }
-    }
-}
-
-impl<ResourceType> TypedHandle<ResourceType> {
-    fn new(index: usize) -> Self {
-        Self {
-            index,
-            _marker: Default::default(),
-        }
-    }
-}
-
 #[derive(Default)]
 pub struct FrameGraph {
-    virtual_resources: Vec<Box<dyn VirtualResource>>,
-    resource_nodes: Vec<ResourceNode>,
-    pass_nodes: Vec<PassNode>,
-    pub merge: bool,
+    pub(crate) virtual_resources: Vec<Box<dyn VirtualResource>>,
+    pub(crate) resource_nodes: Vec<ResourceNode>,
+    pub(crate) pass_nodes: Vec<PassNode>,
+    pub(crate) merge: bool,
+    pub(crate) device_passes: Vec<DevicePass>,
+}
+
+pub struct DevicePass {}
+
+impl DevicePass {
+    pub fn new(_garph: &FrameGraph, _pass_nodes: Vec<PassNode>) -> Self {
+        DevicePass {}
+    }
 }
 
 impl FrameGraph {
+    pub fn create_pass_node_builder(
+        &mut self,
+        name: StringHandle,
+        insert_point: PassInsertPoint,
+    ) -> PassNodeBuilder {
+        let pass_node = PassNode::new(insert_point, name, self.pass_nodes.len());
+
+        PassNodeBuilder {
+            pass_node,
+            graph: self,
+        }
+    }
+
+    pub fn create_pass_node(&mut self, pass: PassNode) {
+        self.pass_nodes.push(pass);
+    }
+
+    pub fn generate_device_passes(&mut self) {
+        //todo Allocator
+
+        let mut pass_id = 1;
+
+        let mut temp: Vec<PassNode> = vec![];
+        swap(&mut temp, &mut self.pass_nodes);
+
+        let mut sub_pass_nodes: Vec<PassNode> = vec![];
+
+        for mut pass_node in temp.into_iter() {
+            if pass_node.ref_count == 0 {
+                return;
+            }
+
+            let device_pass_id = pass_node.device_pass_id;
+
+            if pass_id != device_pass_id {
+                let mut temp_sub_pass_nodes = vec![];
+                swap(&mut temp_sub_pass_nodes, &mut sub_pass_nodes);
+
+                for pass_node in temp_sub_pass_nodes.iter_mut() {
+                    pass_node.release_transient_resources(&mut self.virtual_resources);
+                }
+
+                let device_pass = DevicePass::new(self, temp_sub_pass_nodes);
+
+                self.device_passes.push(device_pass);
+
+                pass_id = device_pass_id;
+            } else {
+                pass_node.request_transient_resources(&mut self.virtual_resources);
+                sub_pass_nodes.push(pass_node);
+            }
+        }
+    }
+
+    pub fn compute_store_action_and_memory_less(&mut self) {
+        let mut pass_id = 0;
+        let mut last_pass_subpass_enable = false;
+
+        //更新pass_node的device_pass_id
+        for pass_node in self.pass_nodes.iter_mut() {
+            if pass_node.ref_count == 0 {
+                continue;
+            }
+
+            let old_pass_id = pass_id;
+
+            pass_id += if !pass_node.subpass || last_pass_subpass_enable != pass_node.subpass {
+                1
+            } else {
+                0
+            };
+
+            pass_id += if old_pass_id == pass_id {
+                pass_node.has_cleared_attachment as usize
+                    * !pass_node.clear_action_ignorable as usize
+            } else {
+                0
+            };
+
+            pass_node.device_pass_id = pass_id;
+
+            last_pass_subpass_enable = pass_node.subpass && !pass_node.subpass_end;
+        }
+
+        let mut resource_ids = vec![];
+
+        for pass_node_index in 0..self.pass_nodes.len() {
+            let pass_node_info = self.pass_nodes[pass_node_index].get_info();
+            if pass_node_info.ref_count == 0 {
+                continue;
+            }
+
+            for (attachment_index, attachment_info) in
+                pass_node_info.attachments_infos.iter().enumerate()
+            {
+                let resource_node_info = self
+                    .get_resource_node(attachment_info.texture_handle_index)
+                    .get_info();
+
+                let info =
+                    self.virtual_resources[resource_node_info.virtual_resource_id].get_info();
+
+                let last_pass_node_device_pass_id =
+                    self.pass_nodes[info.last_pass_index.unwrap()].device_pass_id;
+
+                if info.imported || resource_node_info.reader_count == 0 {
+                    if pass_node_info.subpass {
+                        if pass_node_info.device_pass_id != last_pass_node_device_pass_id {
+                            self.pass_nodes[pass_node_index].attachments[attachment_index]
+                                .store_op = StoreOp::Store;
+                        }
+                    } else if attachment_info.write_mask != 0 {
+                        self.pass_nodes[pass_node_index].attachments[attachment_index].store_op =
+                            StoreOp::Store;
+                    }
+                }
+
+                if pass_node_info.subpass
+                    && attachment_info.load_op == LoadOp::Load
+                    && resource_node_info.version > 1
+                {
+                    if let Some(new_version_resource_node_info) = self
+                        .get_resource_node_with_version(
+                            resource_node_info.virtual_resource_id,
+                            resource_node_info.version - 1,
+                        )
+                        .map(|node| node.get_info())
+                    {
+                        let write_pass_node_info = self.pass_nodes[new_version_resource_node_info
+                            .pass_node_writer_index
+                            .unwrap()]
+                        .get_info();
+
+                        if write_pass_node_info.device_pass_id == pass_node_info.device_pass_id {
+                            self.pass_nodes[pass_node_index].attachments[attachment_index]
+                                .store_op = StoreOp::Store;
+
+                            if let Some(writer_attachment_index) = self.pass_nodes
+                                [new_version_resource_node_info
+                                    .pass_node_writer_index
+                                    .unwrap()]
+                            .get_render_target_attachment_index(
+                                self,
+                                new_version_resource_node_info.virtual_resource_id,
+                            ) {
+                                self.pass_nodes[new_version_resource_node_info
+                                    .pass_node_writer_index
+                                    .unwrap()]
+                                .attachments[writer_attachment_index]
+                                    .store_op = StoreOp::Discard
+                            }
+                        }
+                    }
+                }
+
+                if attachment_info.load_op == LoadOp::Load {
+                    let info = self.virtual_resources[resource_node_info.virtual_resource_id]
+                        .get_mut_info();
+
+                    info.never_loaded = false;
+                }
+
+                if attachment_info.store_op == StoreOp::Store {
+                    let info = self.virtual_resources[resource_node_info.virtual_resource_id]
+                        .get_mut_info();
+
+                    info.never_stored = false;
+                }
+
+                resource_ids.push(resource_node_info.virtual_resource_id);
+            }
+        }
+
+        //todo update memoryless and memorylessMSAA
+        for resource_id in resource_ids.into_iter() {
+            println!("{}", resource_id)
+        }
+    }
+
     pub fn get_resource_node(&self, index: usize) -> &ResourceNode {
         &self.resource_nodes[index]
+    }
+
+    pub fn get_resource_node_with_version(
+        &self,
+        index: usize,
+        version: u8,
+    ) -> Option<&ResourceNode> {
+        if self.resource_nodes[index].version == version {
+            Some(&self.resource_nodes[index])
+        } else {
+            None
+        }
     }
 
     pub fn compute_resource_lifetime(&mut self) {
@@ -283,8 +449,10 @@ impl FrameGraph {
         if self.merge {
             self.merge_pass_nodes();
         }
-    }
 
+        self.compute_store_action_and_memory_less();
+        self.generate_device_passes();
+    }
 
     pub fn create<DescriptorType>(&mut self, name: StringHandle, desc: DescriptorType) -> TypedHandle<DescriptorType::Resource>
     where
@@ -300,6 +468,19 @@ impl FrameGraph {
         let index = self.create_resource_node(virtual_resource);
 
         TypedHandle::new(index)
+    }
+
+    ///指向已存在的资源
+    pub fn create_resource_node_with_id(&mut self, virtual_resource_id: usize) -> usize {
+        let version = self.virtual_resources[virtual_resource_id]
+            .get_info()
+            .version;
+        let index = self.resource_nodes.len();
+
+        self.resource_nodes
+            .push(ResourceNode::new(virtual_resource_id, version));
+
+        index
     }
 
     pub fn create_resource_node(&mut self, virtual_resource: Box<dyn VirtualResource>) -> usize {
@@ -319,10 +500,26 @@ pub struct ResourceNode {
     pub virtual_resource_id: usize,
     version: u8,
     reader_count: u32,
-    pass_node_writer_index: Option<usize>,
+    pub pass_node_writer_index: Option<usize>,
+}
+
+pub struct ResourceNodeInfo {
+    pub virtual_resource_id: usize,
+    pub version: u8,
+    pub reader_count: u32,
+    pub pass_node_writer_index: Option<usize>,
 }
 
 impl ResourceNode {
+    pub fn get_info(&self) -> ResourceNodeInfo {
+        ResourceNodeInfo {
+            virtual_resource_id: self.virtual_resource_id,
+            version: self.version,
+            reader_count: self.reader_count,
+            pass_node_writer_index: self.pass_node_writer_index,
+        }
+    }
+
     pub fn new(virtual_resource_id: usize, version: u8) -> Self {
         Self {
             virtual_resource_id,
@@ -334,34 +531,3 @@ impl ResourceNode {
 }
 
 pub type DynRenderFn = dyn FnOnce() -> Result<(), RendererError>;
-
-mod test {
-    use crate::frame_graph::{FrameResource, FrameResourceDescriptor};
-
-    pub struct TestFrameResource;
-
-    pub struct TestFrameResourceDescriptor;
-
-    impl FrameResource for TestFrameResource {
-        type Descriptor = TestFrameResourceDescriptor;
-    }
-
-    impl FrameResourceDescriptor for TestFrameResourceDescriptor {
-        type Resource = TestFrameResource;
-    }
-
-    #[test]
-    fn test_create() {
-        use super::{FrameGraph, StringHandle};
-
-        let mut frame_graph = FrameGraph::default();
-
-        let desc = TestFrameResourceDescriptor;
-
-        let name = StringHandle::new("test".to_string(), 1);
-
-        let handle = frame_graph.create(name, desc);
-
-        assert_eq!(handle.index, 0);
-    }
-}

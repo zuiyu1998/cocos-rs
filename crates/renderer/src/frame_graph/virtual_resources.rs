@@ -1,6 +1,8 @@
+use std::mem::swap;
+
 use crate::gfx_base::GFXObject;
 
-use super::{FrameResource, StringHandle, pass::PassNode};
+use super::{FrameResource, ResourceRef, StringHandle, pass::PassNode};
 
 #[derive(Default)]
 pub struct VirtualResourceInfo {
@@ -26,24 +28,30 @@ impl VirtualResourceInfo {
 
         self.last_pass_index = Some(pass_node.id)
     }
+
+    pub fn new_version(&mut self) {
+        self.version += 1;
+    }
 }
 
 ///资源
 pub trait VirtualResource: GFXObject {
     fn get_info(&self) -> &VirtualResourceInfo;
     fn get_mut_info(&mut self) -> &mut VirtualResourceInfo;
+    fn request(&mut self);
+    fn release(&mut self);
 }
 
-pub enum FrameResourceState<ResourceType: FrameResource> {
+pub enum ResourceEntryState<ResourceType: FrameResource> {
     Uninitialized(ResourceType::Descriptor),
-    Initialization(ResourceType),
+    Initialization(ResourceRef<ResourceType, ResourceType::Descriptor>),
 }
 
 pub struct ResourceEntry<ResourceType>
 where
     ResourceType: FrameResource,
 {
-    resource: FrameResourceState<ResourceType>,
+    resource: ResourceEntryState<ResourceType>,
     info: VirtualResourceInfo,
 }
 
@@ -53,7 +61,7 @@ where
 {
     pub fn new(id: usize, name: StringHandle, desc: ResourceType::Descriptor) -> Self {
         Self {
-            resource: FrameResourceState::Uninitialized(desc),
+            resource: ResourceEntryState::Uninitialized(desc),
             info: VirtualResourceInfo {
                 name,
                 id,
@@ -75,5 +83,28 @@ where
 
     fn get_mut_info(&mut self) -> &mut VirtualResourceInfo {
         &mut self.info
+    }
+
+    fn release(&mut self) {
+        let desc = match &mut self.resource {
+            ResourceEntryState::Uninitialized(_) => {
+                return;
+            }
+            ResourceEntryState::Initialization(resource_ref) => resource_ref.desc.clone(),
+        };
+
+        let mut temp_state = ResourceEntryState::Uninitialized(desc);
+        swap(&mut temp_state, &mut self.resource);
+
+        if let ResourceEntryState::Initialization(resource_ref) = temp_state {
+            ResourceType::destroy_transient(resource_ref);
+        }
+    }
+
+    fn request(&mut self) {
+        if let ResourceEntryState::Uninitialized(desc) = &mut self.resource {
+            self.resource =
+                ResourceEntryState::Initialization(ResourceType::create_transient(desc));
+        }
     }
 }
