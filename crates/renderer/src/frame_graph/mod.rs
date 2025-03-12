@@ -1,4 +1,5 @@
 pub mod define;
+pub mod device_pass;
 pub mod graph;
 pub mod handle;
 pub mod pass;

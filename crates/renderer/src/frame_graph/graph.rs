@@ -1,12 +1,12 @@
 use super::{
-    FrameResource, FrameResourceDescriptor, TypeEquals,
+    Allocator, FGResource, FGResourceDescriptor, TypeEquals,
+    device_pass::DevicePass,
     handle::TypedHandle,
-    pass::PassNode,
+    pass::{PassNode, PassNodeInfo},
     pass_node_builder::PassNodeBuilder,
     virtual_resources::{ResourceEntry, VirtualResource},
 };
 use crate::{
-    RendererError,
     gfx_base::{LoadOp, StoreOp},
     utils::IndexHandle,
 };
@@ -15,24 +15,26 @@ use std::mem::swap;
 pub type StringHandle = IndexHandle<String, u32>;
 pub type PassInsertPoint = u16;
 
-#[derive(Default)]
 pub struct FrameGraph {
     pub(crate) virtual_resources: Vec<Box<dyn VirtualResource>>,
     pub(crate) resource_nodes: Vec<ResourceNode>,
     pub(crate) pass_nodes: Vec<PassNode>,
     pub(crate) merge: bool,
     pub(crate) device_passes: Vec<DevicePass>,
-}
-
-pub struct DevicePass {}
-
-impl DevicePass {
-    pub fn new(_garph: &FrameGraph, _pass_nodes: Vec<PassNode>) -> Self {
-        DevicePass {}
-    }
+    pub(crate) allocator: Allocator,
 }
 
 impl FrameGraph {
+    pub fn execute(&mut self) {
+        let mut temp: Vec<DevicePass> = vec![];
+
+        swap(&mut temp, &mut self.device_passes);
+
+        for mut device_pass in temp.into_iter() {
+            device_pass.execute()
+        }
+    }
+
     pub fn create_pass_node_builder(
         &mut self,
         name: StringHandle,
@@ -49,40 +51,51 @@ impl FrameGraph {
     pub fn create_pass_node(&mut self, pass: PassNode) {
         self.pass_nodes.push(pass);
     }
+    pub fn release_transient_resources(&mut self, pass_node_index: usize) {
+        let pass_node = &mut self.pass_nodes[pass_node_index];
+        pass_node.release_transient_resources(&self.allocator, &mut self.virtual_resources);
+    }
+
+    pub fn request_transient_resources(&mut self, pass_node_index: usize) {
+        let pass_node = &mut self.pass_nodes[pass_node_index];
+        pass_node.request_transient_resources(&self.allocator, &mut self.virtual_resources);
+    }
 
     pub fn generate_device_passes(&mut self) {
         //todo Allocator
 
         let mut pass_id = 1;
 
-        let mut temp: Vec<PassNode> = vec![];
-        swap(&mut temp, &mut self.pass_nodes);
+        let mut sub_pass_node_indexes: Vec<usize> = vec![];
 
-        let mut sub_pass_nodes: Vec<PassNode> = vec![];
+        let pass_node_info = self
+            .pass_nodes
+            .iter()
+            .map(|pass_node| pass_node.get_info())
+            .collect::<Vec<PassNodeInfo>>();
 
-        for mut pass_node in temp.into_iter() {
-            if pass_node.ref_count == 0 {
+        for pass_node_info in pass_node_info.into_iter() {
+            if pass_node_info.ref_count == 0 {
                 return;
             }
 
-            let device_pass_id = pass_node.device_pass_id;
+            let device_pass_id = pass_node_info.device_pass_id;
 
             if pass_id != device_pass_id {
-                let mut temp_sub_pass_nodes = vec![];
-                swap(&mut temp_sub_pass_nodes, &mut sub_pass_nodes);
+                let mut temp_sub_pass_node_indexes = vec![];
+                swap(&mut temp_sub_pass_node_indexes, &mut sub_pass_node_indexes);
 
-                for pass_node in temp_sub_pass_nodes.iter_mut() {
-                    pass_node.release_transient_resources(&mut self.virtual_resources);
+                for pass_node_index in temp_sub_pass_node_indexes.iter() {
+                    self.release_transient_resources(*pass_node_index);
                 }
 
-                let device_pass = DevicePass::new(self, temp_sub_pass_nodes);
+                let device_pass = DevicePass::new(self, temp_sub_pass_node_indexes);
 
                 self.device_passes.push(device_pass);
 
                 pass_id = device_pass_id;
             } else {
-                pass_node.request_transient_resources(&mut self.virtual_resources);
-                sub_pass_nodes.push(pass_node);
+                self.request_transient_resources(pass_node_info.id);
             }
         }
     }
@@ -456,7 +469,7 @@ impl FrameGraph {
 
     pub fn create<DescriptorType>(&mut self, name: StringHandle, desc: DescriptorType) -> TypedHandle<DescriptorType::Resource>
     where
-        DescriptorType: FrameResourceDescriptor + TypeEquals<Other = <<DescriptorType as FrameResourceDescriptor>::Resource as FrameResource>::Descriptor>,
+        DescriptorType: FGResourceDescriptor + TypeEquals<Other = <<DescriptorType as FGResourceDescriptor>::Resource as FGResource>::Descriptor>,
     {
         let virtual_resource: Box<dyn VirtualResource> =
             Box::new(ResourceEntry::<DescriptorType::Resource>::new(
@@ -529,5 +542,3 @@ impl ResourceNode {
         }
     }
 }
-
-pub type DynRenderFn = dyn FnOnce() -> Result<(), RendererError>;

@@ -1,8 +1,6 @@
-use std::mem::swap;
+use std::{mem::swap, sync::Arc};
 
-use crate::gfx_base::GFXObject;
-
-use super::{FrameResource, ResourceRef, StringHandle, pass::PassNode};
+use super::{Allocator, AnyResource, FGResource, StringHandle, pass::PassNode};
 
 #[derive(Default)]
 pub struct VirtualResourceInfo {
@@ -35,21 +33,28 @@ impl VirtualResourceInfo {
 }
 
 ///资源
-pub trait VirtualResource: GFXObject {
+pub trait VirtualResource {
     fn get_info(&self) -> &VirtualResourceInfo;
     fn get_mut_info(&mut self) -> &mut VirtualResourceInfo;
-    fn request(&mut self);
-    fn release(&mut self);
+    fn request(&mut self, allocator: &Allocator);
+    fn release(&mut self, allocator: &Allocator);
+
+    fn get_any_resource(&self) -> Option<Arc<AnyResource>> {
+        None
+    }
 }
 
-pub enum ResourceEntryState<ResourceType: FrameResource> {
+pub enum ResourceEntryState<ResourceType: FGResource> {
     Uninitialized(ResourceType::Descriptor),
-    Initialization(ResourceRef<ResourceType, ResourceType::Descriptor>),
+    Initialization {
+        resource: AnyResource,
+        desc: ResourceType::Descriptor,
+    },
 }
 
 pub struct ResourceEntry<ResourceType>
 where
-    ResourceType: FrameResource,
+    ResourceType: FGResource,
 {
     resource: ResourceEntryState<ResourceType>,
     info: VirtualResourceInfo,
@@ -57,7 +62,7 @@ where
 
 impl<ResourceType> ResourceEntry<ResourceType>
 where
-    ResourceType: FrameResource,
+    ResourceType: FGResource,
 {
     pub fn new(id: usize, name: StringHandle, desc: ResourceType::Descriptor) -> Self {
         Self {
@@ -71,12 +76,14 @@ where
     }
 }
 
-impl<ResourceType> GFXObject for ResourceEntry<ResourceType> where ResourceType: FrameResource {}
-
 impl<ResourceType> VirtualResource for ResourceEntry<ResourceType>
 where
-    ResourceType: FrameResource,
+    ResourceType: FGResource,
 {
+    fn get_any_resource(&self) -> Option<Arc<AnyResource>> {
+        todo!()
+    }
+
     fn get_info(&self) -> &VirtualResourceInfo {
         &self.info
     }
@@ -85,26 +92,28 @@ where
         &mut self.info
     }
 
-    fn release(&mut self) {
+    fn release(&mut self, allocator: &Allocator) {
         let desc = match &mut self.resource {
             ResourceEntryState::Uninitialized(_) => {
                 return;
             }
-            ResourceEntryState::Initialization(resource_ref) => resource_ref.desc.clone(),
+            ResourceEntryState::Initialization { desc, .. } => desc.clone(),
         };
 
         let mut temp_state = ResourceEntryState::Uninitialized(desc);
         swap(&mut temp_state, &mut self.resource);
 
-        if let ResourceEntryState::Initialization(resource_ref) = temp_state {
-            ResourceType::destroy_transient(resource_ref);
+        if let ResourceEntryState::Initialization { resource, .. } = temp_state {
+            ResourceType::destroy_transient(allocator, resource);
         }
     }
 
-    fn request(&mut self) {
+    fn request(&mut self, allocator: &Allocator) {
         if let ResourceEntryState::Uninitialized(desc) = &mut self.resource {
-            self.resource =
-                ResourceEntryState::Initialization(ResourceType::create_transient(desc));
+            self.resource = ResourceEntryState::Initialization {
+                desc: desc.clone(),
+                resource: ResourceType::create_transient(allocator, desc),
+            };
         }
     }
 }

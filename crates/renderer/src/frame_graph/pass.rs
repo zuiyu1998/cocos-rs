@@ -1,21 +1,25 @@
 use crate::gfx_base::{PassBarrierPair, Rect, Viewport};
 
 use super::{
-    DynRenderFn, FrameGraph, PassInsertPoint, StringHandle,
+    Allocator, DynRenderFn, FrameGraph, PassInsertPoint, StringHandle,
+    device_pass::LogicPass,
     render_target_attachment::{RenderTargetAttachment, RenderTargetAttachmentInfo},
     virtual_resources::VirtualResource,
 };
 
 pub struct PassNode {
-    pass: Option<Box<DynRenderFn>>,
-    //指向读取的资源节点索引
+    ///渲染函数
+    pub render_fn: Option<Box<DynRenderFn>>,
+    ///读取的资源节点索引
     pub reads: Vec<usize>,
+    ///写入的资源节点索引
     pub writes: Vec<usize>,
     pub attachments: Vec<RenderTargetAttachment>,
     pub resource_request_array: Vec<usize>,
     pub resource_release_array: Vec<usize>,
     pub name: StringHandle,
     pub ref_count: u32,
+    //指明device pass中pass node的连接关系
     pub next_pass_node_handle: Option<usize>,
     pub head_pass_node_handle: Option<usize>,
     pub distance_to_headad: u16,
@@ -28,10 +32,10 @@ pub struct PassNode {
     pub subpass_end: bool,
     pub has_cleared_attachment: bool,
     pub clear_action_ignorable: bool,
-    custom_viewport: bool,
-    viewport: Option<Viewport>,
-    scissor: Option<Rect>,
-    barriers: Option<PassBarrierPair>,
+    pub custom_viewport: bool,
+    pub viewport: Option<Viewport>,
+    pub scissor: Option<Rect>,
+    pub barriers: PassBarrierPair,
 }
 
 pub struct PassNodeInfo {
@@ -39,9 +43,19 @@ pub struct PassNodeInfo {
     pub subpass: bool,
     pub device_pass_id: usize,
     pub attachments_infos: Vec<RenderTargetAttachmentInfo>,
+    pub id: usize,
 }
 
 impl PassNode {
+    pub fn take(&mut self) -> LogicPass {
+        LogicPass {
+            custom_viewport: self.custom_viewport,
+            viewport: self.viewport.take(),
+            scissor: self.scissor.take(),
+            render_fn: self.render_fn.take(),
+        }
+    }
+
     pub fn write(&mut self, graph: &mut FrameGraph, out_handle: usize) -> usize {
         let old_resour_node_info = graph.get_resource_node(out_handle).get_info();
         graph.virtual_resources[old_resour_node_info.virtual_resource_id]
@@ -65,22 +79,30 @@ impl PassNode {
         }
     }
 
-    pub fn request_transient_resources(&mut self, resources: &mut [Box<dyn VirtualResource>]) {
+    pub fn request_transient_resources(
+        &mut self,
+        allocator: &Allocator,
+        resources: &mut [Box<dyn VirtualResource>],
+    ) {
         for resource_id in self.resource_request_array.iter() {
             let resource = &mut resources[*resource_id];
 
             if !resource.get_info().imported {
-                resource.request();
+                resource.request(allocator);
             }
         }
     }
 
-    pub fn release_transient_resources(&mut self, resources: &mut [Box<dyn VirtualResource>]) {
+    pub fn release_transient_resources(
+        &mut self,
+        allocator: &Allocator,
+        resources: &mut [Box<dyn VirtualResource>],
+    ) {
         for resource_id in self.resource_request_array.iter() {
             let resource = &mut resources[*resource_id];
 
             if !resource.get_info().imported {
-                resource.release();
+                resource.release(allocator);
             }
         }
     }
@@ -95,6 +117,7 @@ impl PassNode {
                 .iter()
                 .map(|attachment| attachment.get_info())
                 .collect(),
+            id: self.id,
         }
     }
 
@@ -161,7 +184,7 @@ impl PassNode {
 
     pub fn new(insert_point: PassInsertPoint, name: StringHandle, id: usize) -> Self {
         Self {
-            pass: None,
+            render_fn: None,
             reads: vec![],
             writes: vec![],
             attachments: vec![],
@@ -184,7 +207,7 @@ impl PassNode {
             custom_viewport: false,
             viewport: None,
             scissor: None,
-            barriers: None,
+            barriers: Default::default(),
         }
     }
 }

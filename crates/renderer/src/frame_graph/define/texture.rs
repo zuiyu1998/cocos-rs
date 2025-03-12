@@ -1,22 +1,4 @@
-use std::sync::OnceLock;
-
-use super::{
-    FrameResource, FrameResourceAllocator, FrameResourceDescriptor, ResourceRef,
-    allocator::{Allocator, ResourceCreator},
-};
-
-static TEXTURE_ALLOCATOR: OnceLock<TextureAllocator> = OnceLock::new();
-
-pub struct TextureCreator {}
-
-impl ResourceCreator for TextureCreator {
-    type Descriptor = TextureDescriptor;
-    type Resource = Texture;
-
-    fn create(&self, desc: &Self::Descriptor) -> Self::Resource {
-        Texture { desc: desc.clone() }
-    }
-}
+use super::{AnyFGResource, AnyFGResourceDescriptor, FGResource, FGResourceDescriptor};
 
 #[derive(Debug, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Texture {
@@ -28,45 +10,22 @@ pub struct TextureDescriptor {
     pub width: u32,
 }
 
-#[derive(Clone)]
-pub struct TextureAllocator(Allocator<Texture, TextureDescriptor, TextureCreator>);
-
-impl TextureAllocator {
-    pub fn initialization(creator: TextureCreator) {
-        TEXTURE_ALLOCATOR.get_or_init(|| TextureAllocator(Allocator::new(creator)));
-    }
-}
-
-impl FrameResourceAllocator for TextureAllocator {
+impl FGResource for Texture {
     type Descriptor = TextureDescriptor;
-    type Resource = Texture;
 
-    fn alloc(&self, desc: &Self::Descriptor) -> ResourceRef<Self::Resource, Self::Descriptor> {
-        self.0.alloc(desc)
-    }
-
-    fn get_instance() -> Self {
-        TEXTURE_ALLOCATOR.get().cloned().unwrap()
-    }
-
-    fn free(&self, resource: ResourceRef<Self::Resource, Self::Descriptor>) {
-        self.0.free(resource)
+    fn borrow_resource(res: &AnyFGResource) -> &Self {
+        match res {
+            AnyFGResource::Texture(texture) => texture,
+        }
     }
 }
 
-impl FrameResource for Texture {
-    type Descriptor = TextureDescriptor;
-    type Allocator = TextureAllocator;
-
-    fn create_transient(desc: &Self::Descriptor) -> ResourceRef<Texture, TextureDescriptor> {
-        TextureAllocator::get_instance().alloc(desc)
-    }
-
-    fn destroy_transient(resource: ResourceRef<Texture, TextureDescriptor>) {
-        TextureAllocator::get_instance().free(resource)
+impl From<TextureDescriptor> for AnyFGResourceDescriptor {
+    fn from(value: TextureDescriptor) -> Self {
+        AnyFGResourceDescriptor::Texture(value)
     }
 }
 
-impl FrameResourceDescriptor for TextureDescriptor {
+impl FGResourceDescriptor for TextureDescriptor {
     type Resource = Texture;
 }

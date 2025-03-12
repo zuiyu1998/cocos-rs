@@ -1,41 +1,60 @@
 mod allocator;
 mod texture;
 
+use crate::RendererError;
 use std::{hash::Hash, sync::Arc};
 
+pub use allocator::*;
 pub use texture::*;
 
-pub trait FrameResourceAllocator {
-    type Descriptor: FrameResourceDescriptor;
-    type Resource: FrameResource;
-
-    fn alloc(&self, desc: &Self::Descriptor) -> ResourceRef<Self::Resource, Self::Descriptor>;
-    fn free(&self, resource: ResourceRef<Self::Resource, Self::Descriptor>);
-
-    fn get_instance() -> Self;
+pub enum AnyFGResource {
+    Texture(Texture),
 }
 
-pub struct ResourceRef<Resource: FrameResource, Descriptor: FrameResourceDescriptor> {
-    pub desc: Descriptor,
-    pub resource: Arc<Resource>,
-}
-
-///资源
-pub trait FrameResource: 'static + Sized {
-    type Descriptor: FrameResourceDescriptor;
-    type Allocator: FrameResourceAllocator<Resource = Self, Descriptor = Self::Descriptor>;
-
-    fn create_transient(desc: &Self::Descriptor) -> ResourceRef<Self, Self::Descriptor> {
-        Self::Allocator::get_instance().alloc(desc)
+impl AnyFGResource {
+    pub fn is_texture(&self) -> bool {
+        matches!(self, AnyFGResource::Texture(_))
     }
-    fn destroy_transient(resource: ResourceRef<Self, Self::Descriptor>) {
-        Self::Allocator::get_instance().free(resource)
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum AnyFGResourceDescriptor {
+    Texture(TextureDescriptor),
+}
+
+pub struct AnyResource {
+    pub desc: AnyFGResourceDescriptor,
+    pub resource: Arc<AnyFGResource>,
+}
+
+pub type DynRenderFn = dyn FnOnce() -> Result<(), RendererError>;
+
+impl AnyResource {
+    pub fn new(desc: AnyFGResourceDescriptor, resource: Arc<AnyFGResource>) -> Self {
+        AnyResource { desc, resource }
+    }
+}
+///资源
+pub trait FGResource: 'static + Sized {
+    type Descriptor: FGResourceDescriptor;
+
+    fn borrow_resource(res: &AnyFGResource) -> &Self;
+
+    fn create_transient(allocator: &Allocator, desc: &Self::Descriptor) -> AnyResource {
+        let desc: AnyFGResourceDescriptor = desc.clone().into();
+        allocator.alloc(&desc)
+    }
+
+    fn destroy_transient(allocator: &Allocator, resource: AnyResource) {
+        allocator.free(resource);
     }
 }
 
 ///资源描述符
-pub trait FrameResourceDescriptor: 'static + Sized + Clone + Hash + Eq {
-    type Resource: FrameResource;
+pub trait FGResourceDescriptor:
+    'static + Sized + Clone + Hash + Eq + Into<AnyFGResourceDescriptor>
+{
+    type Resource: FGResource;
 }
 
 pub trait TypeEquals {

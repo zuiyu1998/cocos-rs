@@ -1,6 +1,6 @@
 use super::{
-    FrameGraph, FrameResource, FrameResourceDescriptor, StringHandle, TypeEquals,
-    handle::TypedHandle, pass::PassNode,
+    FGResource, FGResourceDescriptor, FrameGraph, StringHandle, TypeEquals, handle::TypedHandle,
+    pass::PassNode,
 };
 
 pub struct PassNodeBuilder<'a> {
@@ -15,7 +15,7 @@ impl PassNodeBuilder<'_> {
         desc: DescriptorType,
     ) -> TypedHandle<DescriptorType::Resource>
     where
-    DescriptorType: FrameResourceDescriptor + TypeEquals<Other = <<DescriptorType as FrameResourceDescriptor>::Resource as FrameResource>::Descriptor>,
+    DescriptorType: FGResourceDescriptor + TypeEquals<Other = <<DescriptorType as FGResourceDescriptor>::Resource as FGResource>::Descriptor>,
     {
         self.graph.create(name, desc)
     }
@@ -24,7 +24,7 @@ impl PassNodeBuilder<'_> {
         self.graph.create_pass_node(self.pass_node);
     }
 
-    pub fn read<Resource: FrameResource>(
+    pub fn read<Resource: FGResource>(
         &mut self,
         input_handle: TypedHandle<Resource>,
     ) -> TypedHandle<Resource> {
@@ -32,7 +32,7 @@ impl PassNodeBuilder<'_> {
         input_handle
     }
 
-    pub fn write<Resource: FrameResource>(
+    pub fn write<Resource: FGResource>(
         &mut self,
         out_handle: TypedHandle<Resource>,
     ) -> TypedHandle<Resource> {

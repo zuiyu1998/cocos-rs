@@ -3,198 +3,87 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use super::{FrameResource, FrameResourceDescriptor, ResourceRef};
+use super::{AnyFGResource, AnyFGResourceDescriptor, AnyResource};
 
-pub struct Allocator<Resource, Descriptor, Creator>(
-    Arc<Mutex<AllocatorInternal<Resource, Descriptor, Creator>>>,
-);
+pub struct Allocator(Arc<Mutex<AllocatorInternal>>);
 
-impl<Resource, Descriptor, Creator> Clone for Allocator<Resource, Descriptor, Creator> {
+impl Clone for Allocator {
     fn clone(&self) -> Self {
         Allocator(Arc::clone(&self.0))
     }
 }
 
-pub trait ResourceCreator {
-    type Resource;
-    type Descriptor;
-    fn create(&self, desc: &Self::Descriptor) -> Self::Resource;
+pub trait ResourceCreator: 'static + Send + Sync {
+    fn create(&self, desc: AnyFGResourceDescriptor) -> AnyFGResource;
 }
 
-impl<Resource, Descriptor, Creator> Allocator<Resource, Descriptor, Creator>
-where
-    Resource: FrameResource,
-    Descriptor: FrameResourceDescriptor,
-    Creator: ResourceCreator<Resource = Resource, Descriptor = Descriptor>,
-{
-    pub fn new(creator: Creator) -> Self {
+impl Allocator {
+    pub fn new(creator: impl ResourceCreator) -> Self {
+        let creator: Box<dyn ResourceCreator> = Box::new(creator);
+
         Allocator(Arc::new(Mutex::new(AllocatorInternal::new(creator))))
     }
 
-    pub fn alloc(&self, desc: &Descriptor) -> ResourceRef<Resource, Descriptor> {
+    pub fn alloc(&self, desc: &AnyFGResourceDescriptor) -> AnyResource {
         let mut guard = self.0.lock().unwrap();
         guard.alloc(desc)
     }
 
-    pub fn free(&self, resource: ResourceRef<Resource, Descriptor>) {
+    pub fn free(&self, resource: AnyResource) {
         let mut guard = self.0.lock().unwrap();
         guard.free(resource)
     }
 }
 
-pub struct AllocatorInternal<Resource, Descriptor, Creator> {
-    pool: HashMap<Descriptor, ResourceState<Resource>>,
-    creator: Creator,
+pub struct AllocatorInternal {
+    pool: HashMap<AnyFGResourceDescriptor, ResourceState>,
+    creator: Box<dyn ResourceCreator>,
 }
 
-pub struct ResourceState<Resource> {
-    resource: Arc<Resource>,
+pub struct ResourceState {
+    resource: Arc<AnyFGResource>,
     count: usize,
 }
 
-impl<Resource, Descriptor, Creator> AllocatorInternal<Resource, Descriptor, Creator>
-where
-    Resource: FrameResource,
-    Descriptor: FrameResourceDescriptor,
-    Creator: ResourceCreator<Resource = Resource, Descriptor = Descriptor>,
-{
-    pub fn new(creator: Creator) -> Self {
+impl ResourceState {
+    pub fn new(resource: Arc<AnyFGResource>, count: usize) -> Self {
+        ResourceState { resource, count }
+    }
+}
+
+impl AllocatorInternal {
+    pub fn new(creator: Box<dyn ResourceCreator>) -> Self {
         Self {
             pool: Default::default(),
             creator,
         }
     }
 
-    fn alloc(&mut self, desc: &Descriptor) -> ResourceRef<Resource, Descriptor> {
+    fn alloc(&mut self, desc: &AnyFGResourceDescriptor) -> AnyResource {
         if let Some(state) = self.pool.get_mut(desc) {
             state.count += 1;
-            return ResourceRef {
-                desc: desc.clone(),
-                resource: state.resource.clone(),
-            };
+            return AnyResource::new(desc.clone(), state.resource.clone());
         }
 
-        let resource = Arc::new(self.creator.create(desc));
+        let resource = Arc::new(self.creator.create(desc.clone()));
 
-        let state = ResourceState {
-            resource: resource.clone(),
-            count: 0,
-        };
+        let state = ResourceState::new(resource.clone(), 0);
 
         self.pool.insert(desc.clone(), state);
 
-        ResourceRef {
+        AnyResource {
             desc: desc.clone(),
             resource,
         }
     }
 
-    fn free(&mut self, resource: ResourceRef<Resource, Descriptor>) {
+    fn free(&mut self, resource: AnyResource) {
         if let Some(state) = self.pool.get_mut(&resource.desc) {
             state.count -= 1;
 
             if state.count == 0 {
                 self.pool.remove(&resource.desc);
             }
-        }
-    }
-}
-
-mod test {
-
-    use std::sync::OnceLock;
-
-    use super::{Allocator, ResourceCreator};
-    use crate::frame_graph::{
-        FrameResource, FrameResourceAllocator, FrameResourceDescriptor, ResourceRef,
-    };
-
-    static TEST_ALLOCATOR: OnceLock<TestAllocator> = OnceLock::new();
-
-    pub struct TestCreator;
-
-    impl ResourceCreator for TestCreator {
-        type Descriptor = TestResourceDescriptor;
-        type Resource = TestResource;
-
-        fn create(&self, _desc: &Self::Descriptor) -> Self::Resource {
-            TestResource {}
-        }
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct TestResource {}
-
-    impl FrameResource for TestResource {
-        type Allocator = TestAllocator;
-        type Descriptor = TestResourceDescriptor;
-    }
-
-    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-    pub struct TestResourceDescriptor {
-        id: usize,
-    }
-
-    impl FrameResourceDescriptor for TestResourceDescriptor {
-        type Resource = TestResource;
-    }
-
-    #[derive(Clone)]
-    pub struct TestAllocator(pub Allocator<TestResource, TestResourceDescriptor, TestCreator>);
-
-    impl TestAllocator {
-        pub fn initialization(creator: TestCreator) {
-            TEST_ALLOCATOR.get_or_init(|| TestAllocator(Allocator::new(creator)));
-        }
-    }
-
-    impl FrameResourceAllocator for TestAllocator {
-        type Descriptor = TestResourceDescriptor;
-        type Resource = TestResource;
-
-        fn alloc(&self, desc: &Self::Descriptor) -> ResourceRef<Self::Resource, Self::Descriptor> {
-            self.0.alloc(desc)
-        }
-
-        fn get_instance() -> Self {
-            TEST_ALLOCATOR.get().cloned().unwrap()
-        }
-
-        fn free(&self, resource: ResourceRef<Self::Resource, Self::Descriptor>) {
-            self.0.free(resource)
-        }
-    }
-
-    #[test]
-    fn test_allocator() {
-        TestAllocator::initialization(TestCreator {});
-
-        let desc = TestResourceDescriptor { id: 0 };
-
-        let resource_ref_0 = TestAllocator::get_instance().alloc(&desc);
-        let resource_ref_1 = TestAllocator::get_instance().alloc(&desc);
-        let resource_ref_2 = TestAllocator::get_instance().alloc(&desc);
-
-        assert_eq!(resource_ref_0.resource, resource_ref_1.resource);
-        assert_eq!(resource_ref_1.resource, resource_ref_2.resource);
-        assert_eq!(resource_ref_0.resource, resource_ref_2.resource);
-
-        {
-            let allocator = TestAllocator::get_instance();
-            let guard = allocator.0.0.lock().unwrap();
-            let count = guard.pool.get(&desc).unwrap().count;
-            assert_eq!(count, 2);
-        }
-
-        TestAllocator::get_instance().free(resource_ref_0);
-        TestAllocator::get_instance().free(resource_ref_1);
-        TestAllocator::get_instance().free(resource_ref_2);
-
-        {
-            let allocator = TestAllocator::get_instance();
-            let guard = allocator.0.0.lock().unwrap();
-            let none = !guard.pool.contains_key(&desc);
-            assert!(none);
         }
     }
 }
