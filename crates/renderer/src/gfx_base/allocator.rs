@@ -1,42 +1,28 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use super::{AnyFGResource, AnyFGResourceDescriptor, AnyResource};
-
-pub struct Allocator(Arc<Mutex<AllocatorInternal>>);
-
-impl Clone for Allocator {
-    fn clone(&self) -> Self {
-        Allocator(Arc::clone(&self.0))
-    }
-}
 
 pub trait ResourceCreator: 'static + Send + Sync {
     fn create(&self, desc: AnyFGResourceDescriptor) -> AnyFGResource;
 }
 
-impl Allocator {
-    pub fn new(creator: impl ResourceCreator) -> Self {
-        let creator: Box<dyn ResourceCreator> = Box::new(creator);
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct AllocatorKey {
+    desc: AnyFGResourceDescriptor,
+    name: String,
+}
 
-        Allocator(Arc::new(Mutex::new(AllocatorInternal::new(creator))))
-    }
-
-    pub fn alloc(&self, desc: &AnyFGResourceDescriptor) -> AnyResource {
-        let mut guard = self.0.lock().unwrap();
-        guard.alloc(desc)
-    }
-
-    pub fn free(&self, resource: AnyResource) {
-        let mut guard = self.0.lock().unwrap();
-        guard.free(resource)
+impl AllocatorKey {
+    pub fn new(name: &str, desc: &AnyFGResourceDescriptor) -> Self {
+        Self {
+            desc: desc.clone(),
+            name: name.to_string(),
+        }
     }
 }
 
-pub struct AllocatorInternal {
-    pool: HashMap<AnyFGResourceDescriptor, ResourceState>,
+pub struct Allocator {
+    pool: HashMap<AllocatorKey, ResourceState>,
     creator: Box<dyn ResourceCreator>,
 }
 
@@ -51,16 +37,21 @@ impl ResourceState {
     }
 }
 
-impl AllocatorInternal {
-    pub fn new(creator: Box<dyn ResourceCreator>) -> Self {
+impl Allocator {
+    pub fn new<T>(creator: T) -> Self
+    where
+        T: ResourceCreator,
+    {
         Self {
             pool: Default::default(),
-            creator,
+            creator: Box::new(creator),
         }
     }
 
-    fn alloc(&mut self, desc: &AnyFGResourceDescriptor) -> AnyResource {
-        if let Some(state) = self.pool.get_mut(desc) {
+    pub fn alloc(&mut self, name: &str, desc: &AnyFGResourceDescriptor) -> AnyResource {
+        let key = AllocatorKey::new(name, desc);
+
+        if let Some(state) = self.pool.get_mut(&key) {
             state.count += 1;
             return AnyResource::new(desc.clone(), state.resource.clone());
         }
@@ -69,7 +60,7 @@ impl AllocatorInternal {
 
         let state = ResourceState::new(resource.clone(), 1);
 
-        self.pool.insert(desc.clone(), state);
+        self.pool.insert(key, state);
 
         AnyResource {
             desc: desc.clone(),
@@ -77,12 +68,14 @@ impl AllocatorInternal {
         }
     }
 
-    fn free(&mut self, resource: AnyResource) {
-        if let Some(state) = self.pool.get_mut(&resource.desc) {
+    pub fn free(&mut self, name: &str, resource: AnyResource) {
+        let key = AllocatorKey::new(name, &resource.desc);
+
+        if let Some(state) = self.pool.get_mut(&key) {
             state.count -= 1;
 
             if state.count == 0 {
-                self.pool.remove(&resource.desc);
+                self.pool.remove(&key);
             }
         }
     }
@@ -91,7 +84,9 @@ impl AllocatorInternal {
 #[cfg(test)]
 pub mod test {
     use super::{Allocator, ResourceCreator};
-    use crate::gfx_base::{AnyFGResource, AnyFGResourceDescriptor, Texture, TextureDescriptor};
+    use crate::gfx_base::{
+        AllocatorKey, AnyFGResource, AnyFGResourceDescriptor, Texture, TextureDescriptor,
+    };
 
     pub struct TestResourceCreator {}
 
@@ -107,27 +102,23 @@ pub mod test {
 
     #[test]
     fn test_allocator() {
-        let allocator = Allocator::new(TestResourceCreator {});
+        let mut allocator = Allocator::new(TestResourceCreator {});
 
         let texture_desc = TextureDescriptor::default().into();
 
-        let a = allocator.alloc(&texture_desc);
-        let b = allocator.alloc(&texture_desc);
+        let a = allocator.alloc("a", &texture_desc);
+        let b = allocator.alloc("a", &texture_desc);
 
         assert_eq!(a.resource, b.resource);
 
-        {
-            let guard = allocator.0.lock().unwrap();
-            let state = guard.pool.get(&texture_desc).unwrap();
-            assert_eq!(state.count, 2);
-        }
+        let key = AllocatorKey::new("a", &texture_desc);
 
-        allocator.free(a);
-        allocator.free(b);
+        let state = allocator.pool.get(&key).unwrap();
+        assert_eq!(state.count, 2);
 
-        {
-            let guard = allocator.0.lock().unwrap();
-            assert!(!guard.pool.contains_key(&texture_desc));
-        }
+        allocator.free("a", a);
+        allocator.free("a", b);
+
+        assert!(!allocator.pool.contains_key(&key));
     }
 }

@@ -72,12 +72,12 @@ impl FrameGraph {
 
     pub fn release_transient_resources(&mut self, pass_node_handle: Handle) {
         let pass_node = &mut self.pass_nodes[pass_node_handle];
-        pass_node.release_transient_resources(&self.allocator, &mut self.virtual_resources);
+        pass_node.release_transient_resources(&mut self.allocator, &mut self.virtual_resources);
     }
 
     pub fn request_transient_resources(&mut self, pass_node_handle: Handle) {
         let pass_node = &mut self.pass_nodes[pass_node_handle];
-        pass_node.request_transient_resources(&self.allocator, &mut self.virtual_resources);
+        pass_node.request_transient_resources(&mut self.allocator, &mut self.virtual_resources);
     }
 
     pub fn generate_device_passes(&mut self) {

@@ -39,8 +39,8 @@ pub trait VirtualResource: 'static {
     fn info(&self) -> &VirtualResourceInfo;
     fn info_mut(&mut self) -> &mut VirtualResourceInfo;
 
-    fn request(&mut self, allocator: &Allocator);
-    fn release(&mut self, allocator: &Allocator);
+    fn request(&mut self, allocator: &mut Allocator);
+    fn release(&mut self, allocator: &mut Allocator);
 
     fn get_any_resource(&self) -> Option<Arc<AnyFGResource>> {
         None
@@ -98,7 +98,9 @@ where
         &mut self.info
     }
 
-    fn release(&mut self, allocator: &Allocator) {
+    fn release(&mut self, allocator: &mut Allocator) {
+        let name = self.info.name.clone();
+
         let desc = match &mut self.resource {
             ResourceEntryState::Uninitialized(_) => {
                 return;
@@ -110,15 +112,15 @@ where
         swap(&mut temp_state, &mut self.resource);
 
         if let ResourceEntryState::Initialization { resource, .. } = temp_state {
-            ResourceType::destroy_transient(allocator, resource);
+            allocator.free(&name, resource);
         }
     }
 
-    fn request(&mut self, allocator: &Allocator) {
+    fn request(&mut self, allocator: &mut Allocator) {
         if let ResourceEntryState::Uninitialized(desc) = &mut self.resource {
             self.resource = ResourceEntryState::Initialization {
                 desc: desc.clone(),
-                resource: ResourceType::create_transient(allocator, desc),
+                resource: allocator.alloc(&self.info.name, &desc.clone().into()),
             };
         }
     }

@@ -41,15 +41,6 @@ pub trait FGResource: 'static + Sized {
     type Descriptor: FGResourceDescriptor;
 
     fn borrow_resource(res: &AnyFGResource) -> &Self;
-
-    fn create_transient(allocator: &Allocator, desc: &Self::Descriptor) -> AnyResource {
-        let desc: AnyFGResourceDescriptor = desc.clone().into();
-        allocator.alloc(&desc)
-    }
-
-    fn destroy_transient(allocator: &Allocator, resource: AnyResource) {
-        allocator.free(resource);
-    }
 }
 
 ///资源描述符

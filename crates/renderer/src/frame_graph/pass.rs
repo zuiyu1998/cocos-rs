@@ -85,7 +85,7 @@ impl PassNode {
 
     pub fn request_transient_resources(
         &mut self,
-        allocator: &Allocator,
+        allocator: &mut Allocator,
         resources: &mut [Box<dyn VirtualResource>],
     ) {
         for resource_id in self.resource_request_array.iter() {
@@ -99,7 +99,7 @@ impl PassNode {
 
     pub(crate) fn release_transient_resources(
         &mut self,
-        allocator: &Allocator,
+        allocator: &mut Allocator,
         resources: &mut [Box<dyn VirtualResource>],
     ) {
         for resource_id in self.resource_request_array.iter() {
