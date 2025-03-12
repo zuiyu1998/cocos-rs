@@ -1,6 +1,6 @@
 use std::{mem::swap, sync::Arc};
 
-use super::{StringHandle, pass::PassNode};
+use super::pass::PassNode;
 
 use crate::gfx_base::{Allocator, AnyFGResource, AnyResource, FGResource, Handle};
 
@@ -15,7 +15,7 @@ pub struct VirtualResourceInfo {
     pub never_stored: bool,
     pub memoryless: bool,
     pub memoryless_msaa: bool,
-    pub name: StringHandle,
+    pub name: String,
     pub handle: Handle,
     pub version: u8,
 }
@@ -67,11 +67,11 @@ impl<ResourceType> ResourceEntry<ResourceType>
 where
     ResourceType: FGResource,
 {
-    pub fn new(handle: Handle, name: StringHandle, desc: ResourceType::Descriptor) -> Self {
+    pub fn new(handle: Handle, name: &str, desc: ResourceType::Descriptor) -> Self {
         Self {
             resource: ResourceEntryState::Uninitialized(desc),
             info: VirtualResourceInfo {
-                name,
+                name: name.to_owned(),
                 handle,
                 ..Default::default()
             },

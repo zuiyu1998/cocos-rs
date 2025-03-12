@@ -1,4 +1,4 @@
-use super::{FrameGraph, StringHandle, pass::PassNode};
+use super::{FrameGraph, pass::PassNode};
 use crate::gfx_base::{FGResource, FGResourceDescriptor, Handle, TypeEquals, TypedHandle};
 
 pub struct PassNodeBuilder<'a> {
@@ -17,7 +17,7 @@ impl<'a> PassNodeBuilder<'a> {
 
     pub fn create<DescriptorType>(
         &mut self,
-        name: StringHandle,
+        name: &str,
         desc: DescriptorType,
     ) -> TypedHandle<DescriptorType::Resource>
     where

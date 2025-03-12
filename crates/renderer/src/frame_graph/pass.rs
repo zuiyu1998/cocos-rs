@@ -1,7 +1,7 @@
 use crate::gfx_base::{Handle, PassBarrierPair, Rect, Viewport};
 
 use super::{
-    DynRenderFn, FrameGraph, PassInsertPoint, StringHandle,
+    DynRenderFn, FrameGraph, PassInsertPoint,
     device_pass::LogicPass,
     render_target_attachment::{RenderTargetAttachment, RenderTargetAttachmentInfo},
     virtual_resources::VirtualResource,
@@ -19,7 +19,7 @@ pub struct PassNode {
     pub attachments: Vec<RenderTargetAttachment>,
     pub resource_request_array: Vec<Handle>,
     pub resource_release_array: Vec<Handle>,
-    pub name: StringHandle,
+    pub name: String,
     pub ref_count: u32,
     //指明device pass中pass node的连接关系
     pub next_pass_node_handle: Option<Handle>,
@@ -186,7 +186,7 @@ impl PassNode {
             .map(|(index, _)| index)
     }
 
-    pub fn new(insert_point: PassInsertPoint, name: StringHandle, handle: Handle) -> Self {
+    pub fn new(insert_point: PassInsertPoint, name: &str, handle: Handle) -> Self {
         Self {
             render_fn: None,
             reads: vec![],
@@ -194,7 +194,7 @@ impl PassNode {
             attachments: vec![],
             resource_request_array: vec![],
             resource_release_array: vec![],
-            name,
+            name: name.to_string(),
             ref_count: 0,
             head_pass_node_handle: None,
             next_pass_node_handle: None,
@@ -221,7 +221,6 @@ mod test {
     use crate::{
         frame_graph::{FrameGraph, render_target_attachment::RenderTargetAttachment},
         gfx_base::{Allocator, Handle, TextureDescriptor, test::TestResourceCreator},
-        utils::IndexHandle,
     };
 
     use super::PassNode;
@@ -229,12 +228,9 @@ mod test {
     #[test]
     fn test_write() {
         let mut graph = FrameGraph::new(Allocator::new(TestResourceCreator {}));
-        let handle = graph.create(
-            IndexHandle::new("2".to_string(), 0),
-            TextureDescriptor::default(),
-        );
+        let handle = graph.create("2", TextureDescriptor::default());
 
-        let mut pass_node = PassNode::new(0, IndexHandle::new("a".to_string(), 1), Handle::new(0));
+        let mut pass_node = PassNode::new(0, "a", Handle::new(0));
 
         let new_resource_handle = pass_node.write(&mut graph, handle.handle());
 
@@ -252,18 +248,13 @@ mod test {
     fn test_can_merge() {
         let mut graph = FrameGraph::new(Allocator::new(TestResourceCreator {}));
 
-        let mut pass_node_a =
-            PassNode::new(0, IndexHandle::new("a".to_string(), 0), Handle::new(0));
-        let mut pass_node_b =
-            PassNode::new(0, IndexHandle::new("b".to_string(), 1), Handle::new(1));
+        let mut pass_node_a = PassNode::new(0, "a", Handle::new(0));
+        let mut pass_node_b = PassNode::new(0, "b", Handle::new(1));
 
         pass_node_a.has_cleared_attachment = true;
         assert!(!pass_node_a.can_merge(&graph, &pass_node_b));
 
-        let handle = graph.create(
-            IndexHandle::new("c".to_string(), 2),
-            TextureDescriptor::default(),
-        );
+        let handle = graph.create("c", TextureDescriptor::default());
 
         pass_node_a.has_cleared_attachment = false;
         pass_node_a.attachments.push(RenderTargetAttachment {

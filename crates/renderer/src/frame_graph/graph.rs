@@ -10,11 +10,9 @@ use crate::{
         Allocator, FGResource, FGResourceDescriptor, Handle, LoadOp, StoreOp, TypeEquals,
         TypedHandle,
     },
-    utils::IndexHandle,
 };
 use std::mem::swap;
 
-pub type StringHandle = IndexHandle<String, u32>;
 pub type PassInsertPoint = u16;
 
 pub type DynRenderFn = dyn FnOnce() -> Result<(), RendererError>;
@@ -60,7 +58,7 @@ impl FrameGraph {
 
     pub fn create_pass_node_builder(
         &mut self,
-        name: StringHandle,
+        name: &str,
         insert_point: PassInsertPoint,
     ) -> PassNodeBuilder {
         let pass_node = PassNode::new(insert_point, name, Handle::new(self.pass_nodes.len()));
@@ -502,7 +500,7 @@ impl FrameGraph {
         self.generate_device_passes();
     }
 
-    pub fn create<DescriptorType>(&mut self, name: StringHandle, desc: DescriptorType) -> TypedHandle<DescriptorType::Resource>
+    pub fn create<DescriptorType>(&mut self, name: &str, desc: DescriptorType) -> TypedHandle<DescriptorType::Resource>
     where
         DescriptorType: FGResourceDescriptor + TypeEquals<Other = <<DescriptorType as FGResourceDescriptor>::Resource as FGResource>::Descriptor>,
     {
@@ -597,47 +595,27 @@ impl ResourceNode {
 #[cfg(test)]
 mod test {
     use super::FrameGraph;
-    use crate::{
-        gfx_base::{
-            Allocator, Handle, Texture, TextureDescriptor, TypedHandle, test::TestResourceCreator,
-        },
-        utils::IndexHandle,
+    use crate::gfx_base::{
+        Allocator, Handle, Texture, TextureDescriptor, TypedHandle, test::TestResourceCreator,
     };
 
     pub fn get_graph() -> (FrameGraph, TypedHandle<Texture>) {
         let mut graph = FrameGraph::new(Allocator::new(TestResourceCreator {}));
 
-        let depth_buffer = graph.create(
-            IndexHandle::new("depth_buffer".to_string(), 0),
-            TextureDescriptor { width: 10 },
-        );
+        let depth_buffer = graph.create("depth_buffer", TextureDescriptor { width: 10 });
 
-        let mut depth_pass =
-            graph.create_pass_node_builder(IndexHandle::new("depth_pass".to_string(), 1), 3);
+        let mut depth_pass = graph.create_pass_node_builder("depth_pass", 3);
         let new_depth_buffer = depth_pass.write(depth_buffer.clone());
 
         depth_pass.build();
 
-        let gbuffer1 = graph.create(
-            IndexHandle::new("gbuffer1".to_string(), 2),
-            TextureDescriptor { width: 12 },
-        );
-        let gbuffer2 = graph.create(
-            IndexHandle::new("gbuffer2".to_string(), 3),
-            TextureDescriptor { width: 13 },
-        );
-        let gbuffer3 = graph.create(
-            IndexHandle::new("gbuffer3".to_string(), 4),
-            TextureDescriptor { width: 14 },
-        );
+        let gbuffer1 = graph.create("gbuffer1", TextureDescriptor { width: 12 });
+        let gbuffer2 = graph.create("gbuffer2", TextureDescriptor { width: 13 });
+        let gbuffer3 = graph.create("gbuffer3", TextureDescriptor { width: 14 });
 
-        let light_buffer = graph.create(
-            IndexHandle::new("light_buffer".to_string(), 5),
-            TextureDescriptor { width: 15 },
-        );
+        let light_buffer = graph.create("light_buffer", TextureDescriptor { width: 15 });
 
-        let mut light_pass =
-            graph.create_pass_node_builder(IndexHandle::new("light".to_string(), 6), 2);
+        let mut light_pass = graph.create_pass_node_builder("light", 2);
 
         light_pass.set_side_effect(true);
 
@@ -650,27 +628,19 @@ mod test {
 
         light_pass.build();
 
-        let backend_buffer = graph.create(
-            IndexHandle::new("backend_buffer".to_string(), 7),
-            TextureDescriptor { width: 16 },
-        );
+        let backend_buffer = graph.create("backend_buffer", TextureDescriptor { width: 16 });
 
-        let mut post_pass =
-            graph.create_pass_node_builder(IndexHandle::new("post".to_string(), 8), 1);
+        let mut post_pass = graph.create_pass_node_builder("post", 1);
 
         post_pass.read(new_light_buffer);
         post_pass.write(backend_buffer);
 
         post_pass.build();
 
-        let only_write_buffer = graph.create(
-            IndexHandle::new("backend_buffer".to_string(), 9),
-            TextureDescriptor { width: 17 },
-        );
+        let only_write_buffer = graph.create("backend_buffer", TextureDescriptor { width: 17 });
 
         //cull
-        let mut only_write_pass =
-            graph.create_pass_node_builder(IndexHandle::new("only_write".to_string(), 10), 4);
+        let mut only_write_pass = graph.create_pass_node_builder("only_write", 4);
 
         let new_only_write_buffer = only_write_pass.write(only_write_buffer);
         only_write_pass.build();
