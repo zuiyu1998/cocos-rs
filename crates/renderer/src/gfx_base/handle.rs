@@ -77,6 +77,15 @@ impl<ResourceType> TypedHandle<ResourceType> {
     }
 }
 
+impl<ResourceType> Clone for TypedHandle<ResourceType> {
+    fn clone(&self) -> Self {
+        Self {
+            index: self.index,
+            _marker: self._marker,
+        }
+    }
+}
+
 impl<ResourceType: Ord> Ord for TypedHandle<ResourceType> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.index.cmp(&other.index)

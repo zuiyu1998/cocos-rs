@@ -89,7 +89,7 @@ impl AllocatorInternal {
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use super::{Allocator, ResourceCreator};
     use crate::gfx_base::{AnyFGResource, AnyFGResourceDescriptor, Texture, TextureDescriptor};
 
