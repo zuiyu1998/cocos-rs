@@ -67,7 +67,7 @@ impl AllocatorInternal {
 
         let resource = Arc::new(self.creator.create(desc.clone()));
 
-        let state = ResourceState::new(resource.clone(), 0);
+        let state = ResourceState::new(resource.clone(), 1);
 
         self.pool.insert(desc.clone(), state);
 
@@ -84,6 +84,50 @@ impl AllocatorInternal {
             if state.count == 0 {
                 self.pool.remove(&resource.desc);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{Allocator, ResourceCreator};
+    use crate::gfx_base::{AnyFGResource, AnyFGResourceDescriptor, Texture, TextureDescriptor};
+
+    pub struct TestResourceCreator {}
+
+    impl ResourceCreator for TestResourceCreator {
+        fn create(&self, desc: AnyFGResourceDescriptor) -> AnyFGResource {
+            match desc {
+                AnyFGResourceDescriptor::Texture(desc) => {
+                    AnyFGResource::Texture(Texture::new(desc))
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_allocator() {
+        let allocator = Allocator::new(TestResourceCreator {});
+
+        let texture_desc = TextureDescriptor::default().into();
+
+        let a = allocator.alloc(&texture_desc);
+        let b = allocator.alloc(&texture_desc);
+
+        assert_eq!(a.resource, b.resource);
+
+        {
+            let guard = allocator.0.lock().unwrap();
+            let state = guard.pool.get(&texture_desc).unwrap();
+            assert_eq!(state.count, 2);
+        }
+
+        allocator.free(a);
+        allocator.free(b);
+
+        {
+            let guard = allocator.0.lock().unwrap();
+            assert!(!guard.pool.contains_key(&texture_desc));
         }
     }
 }
