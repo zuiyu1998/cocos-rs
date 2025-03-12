@@ -1,13 +1,15 @@
 use super::{
     device_pass::DevicePass,
-    handle::TypedHandle,
     pass::{PassNode, PassNodeInfo},
     pass_node_builder::PassNodeBuilder,
     virtual_resources::{ResourceEntry, VirtualResource},
 };
 use crate::{
     RendererError,
-    gfx_base::{Allocator, FGResource, FGResourceDescriptor, LoadOp, StoreOp, TypeEquals},
+    gfx_base::{
+        Allocator, FGResource, FGResourceDescriptor, Handle, LoadOp, StoreOp, TypeEquals,
+        TypedHandle,
+    },
     utils::IndexHandle,
 };
 use std::mem::swap;
@@ -42,7 +44,7 @@ impl FrameGraph {
         name: StringHandle,
         insert_point: PassInsertPoint,
     ) -> PassNodeBuilder {
-        let pass_node = PassNode::new(insert_point, name, self.pass_nodes.len());
+        let pass_node = PassNode::new(insert_point, name, Handle::new(self.pass_nodes.len()));
 
         PassNodeBuilder {
             pass_node,
@@ -53,22 +55,22 @@ impl FrameGraph {
     pub fn create_pass_node(&mut self, pass: PassNode) {
         self.pass_nodes.push(pass);
     }
-    pub fn release_transient_resources(&mut self, pass_node_index: usize) {
-        let pass_node = &mut self.pass_nodes[pass_node_index];
+    pub fn release_transient_resources(&mut self, pass_node_handle: Handle) {
+        let pass_node = &mut self.pass_nodes[pass_node_handle];
         pass_node.release_transient_resources(&self.allocator, &mut self.virtual_resources);
     }
 
-    pub fn request_transient_resources(&mut self, pass_node_index: usize) {
-        let pass_node = &mut self.pass_nodes[pass_node_index];
+    pub fn request_transient_resources(&mut self, pass_node_handle: Handle) {
+        let pass_node = &mut self.pass_nodes[pass_node_handle];
         pass_node.request_transient_resources(&self.allocator, &mut self.virtual_resources);
     }
 
     pub fn generate_device_passes(&mut self) {
         //todo Allocator
 
-        let mut pass_id = 1;
+        let mut pass_handle = Handle::new(1);
 
-        let mut sub_pass_node_indexes: Vec<usize> = vec![];
+        let mut sub_pass_node_handles: Vec<Handle> = vec![];
 
         let pass_node_info = self
             .pass_nodes
@@ -81,29 +83,29 @@ impl FrameGraph {
                 return;
             }
 
-            let device_pass_id = pass_node_info.device_pass_id;
+            let device_pass_handle = pass_node_info.device_pass_handle;
 
-            if pass_id != device_pass_id {
-                let mut temp_sub_pass_node_indexes = vec![];
-                swap(&mut temp_sub_pass_node_indexes, &mut sub_pass_node_indexes);
+            if pass_handle != device_pass_handle {
+                let mut temp_sub_pass_node_handles = vec![];
+                swap(&mut temp_sub_pass_node_handles, &mut sub_pass_node_handles);
 
-                for pass_node_index in temp_sub_pass_node_indexes.iter() {
-                    self.release_transient_resources(*pass_node_index);
+                for pass_node_handle in temp_sub_pass_node_handles.iter() {
+                    self.release_transient_resources(*pass_node_handle);
                 }
 
-                let device_pass = DevicePass::new(self, temp_sub_pass_node_indexes);
+                let device_pass = DevicePass::new(self, temp_sub_pass_node_handles);
 
                 self.device_passes.push(device_pass);
 
-                pass_id = device_pass_id;
+                pass_handle = device_pass_handle;
             } else {
-                self.request_transient_resources(pass_node_info.id);
+                self.request_transient_resources(pass_node_info.handle);
             }
         }
     }
 
     pub fn compute_store_action_and_memory_less(&mut self) {
-        let mut pass_id = 0;
+        let mut pass_handle = Handle::new(0);
         let mut last_pass_subpass_enable = false;
 
         //更新pass_node的device_pass_id
@@ -112,22 +114,26 @@ impl FrameGraph {
                 continue;
             }
 
-            let old_pass_id = pass_id;
+            let old_pass_handle = pass_handle;
 
-            pass_id += if !pass_node.subpass || last_pass_subpass_enable != pass_node.subpass {
-                1
-            } else {
-                0
-            };
+            let update: usize =
+                if !pass_node.subpass || last_pass_subpass_enable != pass_node.subpass {
+                    1
+                } else {
+                    0
+                };
+            pass_handle = pass_handle + update;
 
-            pass_id += if old_pass_id == pass_id {
+            let update = if old_pass_handle == pass_handle {
                 pass_node.has_cleared_attachment as usize
                     * !pass_node.clear_action_ignorable as usize
             } else {
                 0
             };
 
-            pass_node.device_pass_id = pass_id;
+            pass_handle = pass_handle + update;
+
+            pass_node.device_pass_handle = pass_handle;
 
             last_pass_subpass_enable = pass_node.subpass && !pass_node.subpass_end;
         }
@@ -144,17 +150,18 @@ impl FrameGraph {
                 pass_node_info.attachments_infos.iter().enumerate()
             {
                 let resource_node_info = self
-                    .get_resource_node(attachment_info.texture_handle_index)
-                    .get_info();
+                    .get_resource_node(attachment_info.texture_handle)
+                    .to_info();
 
-                let info = self.virtual_resources[resource_node_info.virtual_resource_id].info();
+                let info =
+                    self.virtual_resources[resource_node_info.virtual_resource_handle].info();
 
-                let last_pass_node_device_pass_id =
-                    self.pass_nodes[info.last_pass_index.unwrap()].device_pass_id;
+                let last_pass_node_device_pass_handle =
+                    self.pass_nodes[info.last_pass_index.unwrap()].device_pass_handle;
 
                 if info.imported || resource_node_info.reader_count == 0 {
                     if pass_node_info.subpass {
-                        if pass_node_info.device_pass_id != last_pass_node_device_pass_id {
+                        if pass_node_info.device_pass_handle != last_pass_node_device_pass_handle {
                             self.pass_nodes[pass_node_index].attachments[attachment_index]
                                 .store_op = StoreOp::Store;
                         }
@@ -170,30 +177,32 @@ impl FrameGraph {
                 {
                     if let Some(new_version_resource_node_info) = self
                         .get_resource_node_with_version(
-                            resource_node_info.virtual_resource_id,
+                            resource_node_info.virtual_resource_handle,
                             resource_node_info.version - 1,
                         )
-                        .map(|node| node.get_info())
+                        .map(|node| node.to_info())
                     {
                         let write_pass_node_info = self.pass_nodes[new_version_resource_node_info
-                            .pass_node_writer_index
+                            .pass_node_writer_handle
                             .unwrap()]
                         .to_info();
 
-                        if write_pass_node_info.device_pass_id == pass_node_info.device_pass_id {
+                        if write_pass_node_info.device_pass_handle
+                            == pass_node_info.device_pass_handle
+                        {
                             self.pass_nodes[pass_node_index].attachments[attachment_index]
                                 .store_op = StoreOp::Store;
 
                             if let Some(writer_attachment_index) = self.pass_nodes
                                 [new_version_resource_node_info
-                                    .pass_node_writer_index
+                                    .pass_node_writer_handle
                                     .unwrap()]
                             .get_render_target_attachment_index(
                                 self,
-                                new_version_resource_node_info.virtual_resource_id,
+                                new_version_resource_node_info.virtual_resource_handle,
                             ) {
                                 self.pass_nodes[new_version_resource_node_info
-                                    .pass_node_writer_index
+                                    .pass_node_writer_handle
                                     .unwrap()]
                                 .attachments[writer_attachment_index]
                                     .store_op = StoreOp::Discard
@@ -203,40 +212,38 @@ impl FrameGraph {
                 }
 
                 if attachment_info.load_op == LoadOp::Load {
-                    let info =
-                        self.virtual_resources[resource_node_info.virtual_resource_id].info_mut();
+                    let info = self.virtual_resources[resource_node_info.virtual_resource_handle]
+                        .info_mut();
 
                     info.never_loaded = false;
                 }
 
                 if attachment_info.store_op == StoreOp::Store {
-                    let info =
-                        self.virtual_resources[resource_node_info.virtual_resource_id].info_mut();
+                    let info = self.virtual_resources[resource_node_info.virtual_resource_handle]
+                        .info_mut();
 
                     info.never_stored = false;
                 }
 
-                resource_ids.push(resource_node_info.virtual_resource_id);
+                resource_ids.push(resource_node_info.virtual_resource_handle);
             }
         }
 
         //todo update memoryless and memorylessMSAA
-        for resource_id in resource_ids.into_iter() {
-            println!("{}", resource_id)
-        }
+        // for resource_id in resource_ids.into_iter() {}
     }
 
-    pub fn get_resource_node(&self, index: usize) -> &ResourceNode {
-        &self.resource_nodes[index]
+    pub fn get_resource_node(&self, handle: Handle) -> &ResourceNode {
+        &self.resource_nodes[handle]
     }
 
     pub fn get_resource_node_with_version(
         &self,
-        index: usize,
+        handle: Handle,
         version: u8,
     ) -> Option<&ResourceNode> {
-        if self.resource_nodes[index].version == version {
-            Some(&self.resource_nodes[index])
+        if self.resource_nodes[handle].version == version {
+            Some(&self.resource_nodes[handle])
         } else {
             None
         }
@@ -251,14 +258,14 @@ impl FrameGraph {
             //更新渲染节点读取的资源节点所指向资源的生命周期
             for resource_index in pass_node.reads.iter() {
                 let resource_node = &self.resource_nodes[*resource_index];
-                let resource = &mut self.virtual_resources[resource_node.virtual_resource_id];
+                let resource = &mut self.virtual_resources[resource_node.virtual_resource_handle];
                 resource.info_mut().update_lifetime(pass_node);
             }
 
             //更新渲染节点吸入的资源节点所指向资源的生命周期
             for resource_index in pass_node.writes.iter() {
                 let resource_node = &self.resource_nodes[*resource_index];
-                let resource = &mut self.virtual_resources[resource_node.virtual_resource_id];
+                let resource = &mut self.virtual_resources[resource_node.virtual_resource_handle];
                 let info = resource.info_mut();
                 info.update_lifetime(pass_node);
                 info.writer_count += 1;
@@ -278,7 +285,7 @@ impl FrameGraph {
             let last_pass_index = info.last_pass_index.unwrap();
             let pass_node = &self.pass_nodes[last_pass_index];
             let has_attachment = pass_node
-                .get_render_target_attachment(self, info.id)
+                .get_render_target_attachment(self, info.handle)
                 .is_some();
 
             if info.ref_count == 0 && !has_attachment {
@@ -288,10 +295,10 @@ impl FrameGraph {
             let first_pass_index = info.first_pass_index.unwrap();
 
             let first_pass_node = &mut self.pass_nodes[first_pass_index];
-            first_pass_node.resource_request_array.push(info.id);
+            first_pass_node.resource_request_array.push(info.handle);
 
             let last_pass_node = &mut self.pass_nodes[last_pass_index];
-            last_pass_node.resource_release_array.push(info.id);
+            last_pass_node.resource_release_array.push(info.handle);
         }
     }
 
@@ -314,21 +321,23 @@ impl FrameGraph {
             }
         }
 
-        let mut resource_index_stack: Vec<usize> = vec![];
+        let mut resource_handle_stack: Vec<Handle> = vec![];
 
         //记录所有要被剔除的资源节点
-        for (resource_index, resource_node) in self.resource_nodes.iter().enumerate() {
-            if resource_node.reader_count == 0 && resource_node.pass_node_writer_index.is_some() {
-                resource_index_stack.push(resource_index);
+        for resource_node_info in self.resource_nodes.iter().map(|node| node.to_info()) {
+            if resource_node_info.reader_count == 0
+                && resource_node_info.pass_node_writer_handle.is_some()
+            {
+                resource_handle_stack.push(resource_node_info.handle);
             }
         }
 
         //删除资源节点引用的pass_node计数
-        while !resource_index_stack.is_empty() {
-            let resource_node = &self.resource_nodes[resource_index_stack.pop().unwrap()];
+        while !resource_handle_stack.is_empty() {
+            let resource_node = &self.resource_nodes[resource_handle_stack.pop().unwrap()];
 
             let pass_node_writer =
-                &mut self.pass_nodes[resource_node.pass_node_writer_index.unwrap()];
+                &mut self.pass_nodes[resource_node.pass_node_writer_handle.unwrap()];
 
             pass_node_writer.ref_count -= 1;
 
@@ -339,7 +348,7 @@ impl FrameGraph {
                     resource_node.reader_count -= 1;
 
                     if resource_node.reader_count == 0 {
-                        resource_index_stack.push(*resource_index);
+                        resource_handle_stack.push(*resource_index);
                     }
                 }
             }
@@ -347,14 +356,14 @@ impl FrameGraph {
 
         //更新资源节点对应的虚拟资源引用
         for resource_node in self.resource_nodes.iter() {
-            let resource = &mut self.virtual_resources[resource_node.virtual_resource_id];
+            let resource = &mut self.virtual_resources[resource_node.virtual_resource_handle];
             resource.info_mut().ref_count += 1;
         }
     }
 
     pub fn merge_pass_nodes(&mut self) {
-        let count = self.pass_nodes.len();
-        let mut current_pass_id = 0;
+        let count = Handle::new(self.pass_nodes.len());
+        let mut current_pass_id = Handle::new(0);
         let mut last_pass_id;
 
         //获取最近且有效的pass node
@@ -364,13 +373,13 @@ impl FrameGraph {
             if pass_node.ref_count != 0 {
                 break;
             }
-            current_pass_id += 1;
+            current_pass_id = current_pass_id + 1;
         }
 
         last_pass_id = current_pass_id;
 
         while {
-            current_pass_id += 1;
+            current_pass_id = current_pass_id + 1;
             current_pass_id < count
         } {
             let current_pass_node = &self.pass_nodes[current_pass_id];
@@ -398,7 +407,7 @@ impl FrameGraph {
                         distance += 1;
                     }
 
-                    prev_pass_node.id
+                    prev_pass_node.handle
                 };
 
                 let prev_pass_node = &mut self.pass_nodes[prev_pass_node_id];
@@ -420,19 +429,19 @@ impl FrameGraph {
                     let attachment_in_current_pass_node = &current_pass_node.attachments[i];
 
                     let reader_count = self.resource_nodes
-                        [attachment_in_current_pass_node.texture_handle.index]
+                        [attachment_in_current_pass_node.to_info().texture_handle]
                         .reader_count;
 
-                    let resource_node =
-                        &mut self.resource_nodes[attachment_in_last_pass_node.texture_handle.index];
+                    let resource_node = &mut self.resource_nodes
+                        [attachment_in_last_pass_node.to_info().texture_handle];
 
-                    let write_count = self.virtual_resources[resource_node.virtual_resource_id]
+                    let write_count = self.virtual_resources[resource_node.virtual_resource_handle]
                         .info()
                         .writer_count;
 
                     assert_eq!(write_count, 1);
 
-                    self.virtual_resources[resource_node.virtual_resource_id]
+                    self.virtual_resources[resource_node.virtual_resource_handle]
                         .info_mut()
                         .writer_count -= 1;
 
@@ -474,7 +483,7 @@ impl FrameGraph {
     {
         let virtual_resource: Box<dyn VirtualResource> =
             Box::new(ResourceEntry::<DescriptorType::Resource>::new(
-                self.virtual_resources.len(),
+                Handle::new(self.virtual_resources.len()),
                 name,
                 TypeEquals::same(desc),
             ));
@@ -485,59 +494,66 @@ impl FrameGraph {
     }
 
     ///指向已存在的资源
-    pub fn create_resource_node_with_id(&mut self, virtual_resource_id: usize) -> usize {
-        let version = self.virtual_resources[virtual_resource_id].info().version;
-        let index = self.resource_nodes.len();
+    pub fn create_resource_node_with_id(&mut self, virtual_resource_handle: Handle) -> Handle {
+        let version = self.virtual_resources[virtual_resource_handle]
+            .info()
+            .version;
+        let handle = Handle::new(self.resource_nodes.len());
 
         self.resource_nodes
-            .push(ResourceNode::new(virtual_resource_id, version));
+            .push(ResourceNode::new(handle, virtual_resource_handle, version));
 
-        index
+        handle
     }
 
-    pub fn create_resource_node(&mut self, virtual_resource: Box<dyn VirtualResource>) -> usize {
-        let id = virtual_resource.info().id;
+    pub fn create_resource_node(&mut self, virtual_resource: Box<dyn VirtualResource>) -> Handle {
+        let virtual_resource_handle = virtual_resource.info().handle;
         let version = virtual_resource.info().version;
         self.virtual_resources.push(virtual_resource);
 
-        let index = self.resource_nodes.len();
+        let handle = Handle::new(self.resource_nodes.len());
 
-        self.resource_nodes.push(ResourceNode::new(id, version));
+        self.resource_nodes
+            .push(ResourceNode::new(handle, virtual_resource_handle, version));
 
-        index
+        handle
     }
 }
 
 pub struct ResourceNode {
-    pub virtual_resource_id: usize,
+    pub virtual_resource_handle: Handle,
     version: u8,
     reader_count: u32,
-    pub pass_node_writer_index: Option<usize>,
+    pub pass_node_writer_handle: Option<Handle>,
+    pub handle: Handle,
 }
 
 pub struct ResourceNodeInfo {
-    pub virtual_resource_id: usize,
+    pub virtual_resource_handle: Handle,
     pub version: u8,
     pub reader_count: u32,
-    pub pass_node_writer_index: Option<usize>,
+    pub pass_node_writer_handle: Option<Handle>,
+    pub handle: Handle,
 }
 
 impl ResourceNode {
-    pub fn get_info(&self) -> ResourceNodeInfo {
+    pub fn to_info(&self) -> ResourceNodeInfo {
         ResourceNodeInfo {
-            virtual_resource_id: self.virtual_resource_id,
+            virtual_resource_handle: self.virtual_resource_handle,
             version: self.version,
             reader_count: self.reader_count,
-            pass_node_writer_index: self.pass_node_writer_index,
+            pass_node_writer_handle: self.pass_node_writer_handle,
+            handle: self.handle,
         }
     }
 
-    pub fn new(virtual_resource_id: usize, version: u8) -> Self {
+    pub fn new(handle: Handle, virtual_resource_handle: Handle, version: u8) -> Self {
         Self {
-            virtual_resource_id,
+            virtual_resource_handle,
             version,
             reader_count: 0,
-            pass_node_writer_index: None,
+            pass_node_writer_handle: None,
+            handle,
         }
     }
 }

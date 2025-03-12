@@ -1,4 +1,4 @@
-use crate::gfx_base::{PassBarrierPair, Rect, Viewport};
+use crate::gfx_base::{Handle, PassBarrierPair, Rect, Viewport};
 
 use super::{
     DynRenderFn, FrameGraph, PassInsertPoint, StringHandle,
@@ -13,21 +13,21 @@ pub struct PassNode {
     ///渲染函数
     pub render_fn: Option<Box<DynRenderFn>>,
     ///读取的资源节点索引
-    pub reads: Vec<usize>,
+    pub reads: Vec<Handle>,
     ///写入的资源节点索引
-    pub writes: Vec<usize>,
+    pub writes: Vec<Handle>,
     pub attachments: Vec<RenderTargetAttachment>,
-    pub resource_request_array: Vec<usize>,
-    pub resource_release_array: Vec<usize>,
+    pub resource_request_array: Vec<Handle>,
+    pub resource_release_array: Vec<Handle>,
     pub name: StringHandle,
     pub ref_count: u32,
     //指明device pass中pass node的连接关系
-    pub next_pass_node_handle: Option<usize>,
-    pub head_pass_node_handle: Option<usize>,
+    pub next_pass_node_handle: Option<Handle>,
+    pub head_pass_node_handle: Option<Handle>,
     pub distance_to_headad: u16,
     used_render_target_slot_mask: u16,
-    pub id: usize,
-    pub device_pass_id: usize,
+    pub handle: Handle,
+    pub device_pass_handle: Handle,
     pub insert_point: PassInsertPoint,
     pub side_effect: bool,
     pub subpass: bool,
@@ -43,9 +43,9 @@ pub struct PassNode {
 pub struct PassNodeInfo {
     pub ref_count: u32,
     pub subpass: bool,
-    pub device_pass_id: usize,
+    pub device_pass_handle: Handle,
     pub attachments_infos: Vec<RenderTargetAttachmentInfo>,
-    pub id: usize,
+    pub handle: Handle,
 }
 
 impl PassNode {
@@ -58,16 +58,16 @@ impl PassNode {
         }
     }
 
-    pub fn write(&mut self, graph: &mut FrameGraph, out_handle: usize) -> usize {
-        let old_resour_node_info = graph.get_resource_node(out_handle).get_info();
-        graph.virtual_resources[old_resour_node_info.virtual_resource_id]
+    pub fn write(&mut self, graph: &mut FrameGraph, out_handle: Handle) -> Handle {
+        let old_resour_node_info = graph.get_resource_node(out_handle).to_info();
+        graph.virtual_resources[old_resour_node_info.virtual_resource_handle]
             .info_mut()
             .new_version();
 
         let new_resour_node_handle =
-            graph.create_resource_node_with_id(old_resour_node_info.virtual_resource_id);
+            graph.create_resource_node_with_id(old_resour_node_info.virtual_resource_handle);
 
-        graph.resource_nodes[new_resour_node_handle].pass_node_writer_index =
+        graph.resource_nodes[new_resour_node_handle].pass_node_writer_handle =
             Some(new_resour_node_handle);
 
         self.writes.push(new_resour_node_handle);
@@ -75,7 +75,7 @@ impl PassNode {
         new_resour_node_handle
     }
 
-    pub fn read(&mut self, input_handle: usize) {
+    pub fn read(&mut self, input_handle: Handle) {
         if !self.reads.contains(&input_handle) {
             self.reads.push(input_handle);
         }
@@ -87,7 +87,7 @@ impl PassNode {
         resources: &mut [Box<dyn VirtualResource>],
     ) {
         for resource_id in self.resource_request_array.iter() {
-            let resource = &mut resources[*resource_id];
+            let resource = &mut resources[resource_id.index()];
 
             if !resource.info().imported {
                 resource.request(allocator);
@@ -101,7 +101,7 @@ impl PassNode {
         resources: &mut [Box<dyn VirtualResource>],
     ) {
         for resource_id in self.resource_request_array.iter() {
-            let resource = &mut resources[*resource_id];
+            let resource = &mut resources[resource_id.index()];
 
             if !resource.info().imported {
                 resource.release(allocator);
@@ -113,13 +113,13 @@ impl PassNode {
         PassNodeInfo {
             ref_count: self.ref_count,
             subpass: self.subpass,
-            device_pass_id: self.device_pass_id,
+            device_pass_handle: self.device_pass_handle,
             attachments_infos: self
                 .attachments
                 .iter()
                 .map(|attachment| attachment.to_info())
                 .collect(),
-            id: self.id,
+            handle: self.handle,
         }
     }
 
@@ -141,11 +141,11 @@ impl PassNode {
                 || attachment_a.layer != attachment_b.layer
                 || attachment_a.index != attachment_b.index
                 || graph
-                    .get_resource_node(attachment_a.texture_handle.index)
-                    .virtual_resource_id
+                    .get_resource_node(attachment_a.texture_handle.handle())
+                    .virtual_resource_handle
                     != graph
-                        .get_resource_node(attachment_b.texture_handle.index)
-                        .virtual_resource_id
+                        .get_resource_node(attachment_b.texture_handle.handle())
+                        .virtual_resource_handle
             {
                 return false;
             }
@@ -157,34 +157,34 @@ impl PassNode {
     pub fn get_render_target_attachment(
         &self,
         graph: &FrameGraph,
-        virtual_resource_id: usize,
+        virtual_resource_handle: Handle,
     ) -> Option<&RenderTargetAttachment> {
         self.attachments.iter().find(|attachment| {
             graph
-                .get_resource_node(attachment.texture_handle.index)
-                .virtual_resource_id
-                == virtual_resource_id
+                .get_resource_node(attachment.texture_handle.handle())
+                .virtual_resource_handle
+                == virtual_resource_handle
         })
     }
 
     pub fn get_render_target_attachment_index(
         &self,
         graph: &FrameGraph,
-        virtual_resource_id: usize,
+        virtual_resource_handle: Handle,
     ) -> Option<usize> {
         self.attachments
             .iter()
             .enumerate()
             .find(|(_index, attachment)| {
                 graph
-                    .get_resource_node(attachment.texture_handle.index)
-                    .virtual_resource_id
-                    == virtual_resource_id
+                    .get_resource_node(attachment.texture_handle.handle())
+                    .virtual_resource_handle
+                    == virtual_resource_handle
             })
             .map(|(index, _)| index)
     }
 
-    pub fn new(insert_point: PassInsertPoint, name: StringHandle, id: usize) -> Self {
+    pub fn new(insert_point: PassInsertPoint, name: StringHandle, handle: Handle) -> Self {
         Self {
             render_fn: None,
             reads: vec![],
@@ -198,8 +198,8 @@ impl PassNode {
             next_pass_node_handle: None,
             distance_to_headad: 0,
             used_render_target_slot_mask: 0,
-            id,
-            device_pass_id: 0,
+            handle,
+            device_pass_handle: Handle::new(0),
             insert_point,
             side_effect: false,
             subpass: false,

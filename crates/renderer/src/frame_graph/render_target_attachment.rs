@@ -1,6 +1,4 @@
-use crate::gfx_base::{AccessFlags, LoadOp, StoreOp, Texture};
-
-use super::handle::TypedHandle;
+use crate::gfx_base::{AccessFlags, Handle, LoadOp, StoreOp, Texture, TypedHandle};
 
 #[derive(Debug, Eq, PartialEq, Default)]
 pub struct RenderTargetAttachment {
@@ -17,7 +15,7 @@ impl RenderTargetAttachment {
 
     pub fn to_info(&self) -> RenderTargetAttachmentInfo {
         RenderTargetAttachmentInfo {
-            texture_handle_index: self.texture_handle.index,
+            texture_handle: self.texture_handle.handle(),
             store_op: self.store_op,
             write_mask: self.desc.write_mask,
             load_op: self.desc.load_op,
@@ -29,7 +27,7 @@ impl RenderTargetAttachment {
 }
 
 pub struct RenderTargetAttachmentInfo {
-    pub texture_handle_index: usize,
+    pub texture_handle: Handle,
     pub store_op: StoreOp,
     pub write_mask: u8,
     pub load_op: LoadOp,

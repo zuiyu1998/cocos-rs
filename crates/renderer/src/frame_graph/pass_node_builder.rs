@@ -1,5 +1,5 @@
-use super::{FrameGraph, StringHandle, handle::TypedHandle, pass::PassNode};
-use crate::gfx_base::{FGResource, FGResourceDescriptor, TypeEquals};
+use super::{FrameGraph, StringHandle, pass::PassNode};
+use crate::gfx_base::{FGResource, FGResourceDescriptor, TypeEquals, TypedHandle};
 
 pub struct PassNodeBuilder<'a> {
     pub pass_node: PassNode,
@@ -26,7 +26,7 @@ impl PassNodeBuilder<'_> {
         &mut self,
         input_handle: TypedHandle<Resource>,
     ) -> TypedHandle<Resource> {
-        self.pass_node.read(input_handle.index);
+        self.pass_node.read(input_handle.handle());
         input_handle
     }
 
@@ -34,7 +34,7 @@ impl PassNodeBuilder<'_> {
         &mut self,
         out_handle: TypedHandle<Resource>,
     ) -> TypedHandle<Resource> {
-        let out_handle_index = self.pass_node.write(self.graph, out_handle.index);
+        let out_handle_index = self.pass_node.write(self.graph, out_handle.handle());
         TypedHandle::new(out_handle_index)
     }
 }

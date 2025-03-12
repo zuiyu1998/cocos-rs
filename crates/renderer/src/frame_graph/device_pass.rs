@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
 use crate::gfx_base::{
-    AnyFGResource, INVALID_BINDING, PassBarrierPair, Rect, StoreOp, SubpassInfo, Viewport,
+    AnyFGResource, Handle, INVALID_BINDING, PassBarrierPair, Rect, StoreOp, SubpassInfo, Viewport,
 };
 
 use super::{
@@ -22,43 +22,43 @@ pub struct DevicePass {
 
 #[derive(Default)]
 pub struct DevicePassResourceTable {
-    reads: HashMap<usize, Arc<AnyFGResource>>,
-    writes: HashMap<usize, Arc<AnyFGResource>>,
+    reads: HashMap<Handle, Arc<AnyFGResource>>,
+    writes: HashMap<Handle, Arc<AnyFGResource>>,
 }
 pub fn extra_resource(
     graph: &FrameGraph,
-    resource_indexes: &[usize],
-    to: &mut HashMap<usize, Arc<AnyFGResource>>,
+    resource_indexes: &[Handle],
+    to: &mut HashMap<Handle, Arc<AnyFGResource>>,
 ) {
     for resource_index in resource_indexes.iter() {
         let resource_node = graph.get_resource_node(*resource_index);
 
         if let Some(resource) =
-            graph.virtual_resources[resource_node.virtual_resource_id].get_any_resource()
+            graph.virtual_resources[resource_node.virtual_resource_handle].get_any_resource()
         {
             to.insert(*resource_index, resource);
         }
     }
 }
 impl DevicePassResourceTable {
-    fn extra(&mut self, graph: &FrameGraph, pass_node_index: usize) {
-        let mut pass_node_index = pass_node_index;
+    fn extra(&mut self, graph: &FrameGraph, pass_node_handle: Handle) {
+        let mut pass_node_handle = pass_node_handle;
 
         loop {
-            let reads = graph.pass_nodes[pass_node_index].reads.clone();
+            let reads = graph.pass_nodes[pass_node_handle].reads.clone();
             extra_resource(graph, &reads, &mut self.reads);
 
-            let writes = graph.pass_nodes[pass_node_index].writes.clone();
+            let writes = graph.pass_nodes[pass_node_handle].writes.clone();
             extra_resource(graph, &writes, &mut self.writes);
 
-            let next = graph.pass_nodes[pass_node_index]
+            let next = graph.pass_nodes[pass_node_handle]
                 .next_pass_node_handle
                 .is_some();
 
             if !next {
                 break;
             } else {
-                pass_node_index = graph.pass_nodes[pass_node_index]
+                pass_node_handle = graph.pass_nodes[pass_node_handle]
                     .next_pass_node_handle
                     .unwrap();
             }
@@ -87,16 +87,16 @@ pub struct Subpass {
 }
 
 impl DevicePass {
-    pub fn new(graph: &mut FrameGraph, pass_node_indexes: Vec<usize>) -> Self {
+    pub fn new(graph: &mut FrameGraph, pass_node_handles: Vec<Handle>) -> Self {
         let mut device_pass = DevicePass::default();
         let mut attachments = vec![];
 
         let mut index = 0;
 
-        for pass_node_index in pass_node_indexes.iter() {
-            device_pass.append(graph, *pass_node_index, &mut attachments);
+        for pass_node_handle in pass_node_handles.iter() {
+            device_pass.append(graph, *pass_node_handle, &mut attachments);
 
-            let barriers = graph.pass_nodes[*pass_node_index].barriers.clone();
+            let barriers = graph.pass_nodes[*pass_node_handle].barriers.clone();
             device_pass.barriers.push(barriers);
 
             index += 1;
@@ -167,8 +167,8 @@ impl DevicePass {
         //todo renderTargets
 
         for attachment in attachments.into_iter() {
-            let resource_node = graph.get_resource_node(attachment.texture_handle.index);
-            let resource = graph.virtual_resources[resource_node.virtual_resource_id]
+            let resource_node = graph.get_resource_node(attachment.to_info().texture_handle);
+            let resource = graph.virtual_resources[resource_node.virtual_resource_handle]
                 .get_any_resource()
                 .unwrap();
 
@@ -181,7 +181,7 @@ impl DevicePass {
             device_pass.attachments.push(attachment);
         }
 
-        for pass_node_index in pass_node_indexes.iter() {
+        for pass_node_index in pass_node_handles.iter() {
             device_pass.resource_table.extra(graph, *pass_node_index);
         }
 
@@ -192,21 +192,21 @@ impl DevicePass {
     fn append(
         &mut self,
         graph: &mut FrameGraph,
-        pass_node_index: usize,
+        pass_node_handle: Handle,
         attachments: &mut Vec<RenderTargetAttachment>,
     ) {
         let mut sub_pass = Subpass::default();
 
-        let mut pass_node_index = pass_node_index;
+        let mut pass_node_handle = pass_node_handle;
 
         loop {
-            let logic_pass = graph.pass_nodes[pass_node_index].take();
+            let logic_pass = graph.pass_nodes[pass_node_handle].take();
             sub_pass.logic_passes.push(logic_pass);
 
-            let reads = graph.pass_nodes[pass_node_index].reads.clone();
+            let reads = graph.pass_nodes[pass_node_handle].reads.clone();
 
             let attachment_infos: Vec<RenderTargetAttachmentInfo> = graph.pass_nodes
-                [pass_node_index]
+                [pass_node_handle]
                 .attachments
                 .iter()
                 .map(|attachment| attachment.to_info())
@@ -226,7 +226,7 @@ impl DevicePass {
                     if let Some(index) = attachments
                         .iter()
                         .enumerate()
-                        .find(|(_index, attachment)| attachment.texture_handle.index == *handle)
+                        .find(|(_index, attachment)| attachment.to_info().texture_handle == *handle)
                         .map(|(index, _)| index)
                     {
                         if index + 1 == attachments.len() {
@@ -263,14 +263,14 @@ impl DevicePass {
                 }
             }
 
-            let next = graph.pass_nodes[pass_node_index]
+            let next = graph.pass_nodes[pass_node_handle]
                 .next_pass_node_handle
                 .is_some();
 
             if !next {
                 break;
             } else {
-                pass_node_index = graph.pass_nodes[pass_node_index]
+                pass_node_handle = graph.pass_nodes[pass_node_handle]
                     .next_pass_node_handle
                     .unwrap();
             }
@@ -339,11 +339,10 @@ impl DevicePass {
             let last_attachment_info = last_attachment_info.unwrap();
             let last_attachment_index = last_attachment_index.unwrap();
 
-            let resource_node_a =
-                graph.get_resource_node(last_attachment_info.texture_handle_index);
-            let resource_node_b = graph.get_resource_node(attachment_info.texture_handle_index);
+            let resource_node_a = graph.get_resource_node(last_attachment_info.texture_handle);
+            let resource_node_b = graph.get_resource_node(attachment_info.texture_handle);
 
-            if resource_node_a.virtual_resource_id == resource_node_b.virtual_resource_id {
+            if resource_node_a.virtual_resource_handle == resource_node_b.virtual_resource_handle {
                 if attachment_info.store_op != StoreOp::Discard {
                     attachments[last_attachment_index].store_op = attachment_info.store_op;
                     attachments[last_attachment_index].desc.end_accesses =

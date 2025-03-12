@@ -2,12 +2,12 @@ use std::{mem::swap, sync::Arc};
 
 use super::{StringHandle, pass::PassNode};
 
-use crate::gfx_base::{Allocator, AnyFGResource, AnyResource, FGResource};
+use crate::gfx_base::{Allocator, AnyFGResource, AnyResource, FGResource, Handle};
 
 #[derive(Default)]
 pub struct VirtualResourceInfo {
-    pub first_pass_index: Option<usize>,
-    pub last_pass_index: Option<usize>,
+    pub first_pass_index: Option<Handle>,
+    pub last_pass_index: Option<Handle>,
     pub ref_count: u32,
     pub writer_count: u32,
     pub imported: bool,
@@ -16,17 +16,17 @@ pub struct VirtualResourceInfo {
     pub memoryless: bool,
     pub memoryless_msaa: bool,
     pub name: StringHandle,
-    pub id: usize,
+    pub handle: Handle,
     pub version: u8,
 }
 
 impl VirtualResourceInfo {
     pub fn update_lifetime(&mut self, pass_node: &PassNode) {
         if self.first_pass_index.is_none() {
-            self.first_pass_index = Some(pass_node.id);
+            self.first_pass_index = Some(pass_node.handle);
         }
 
-        self.last_pass_index = Some(pass_node.id)
+        self.last_pass_index = Some(pass_node.handle)
     }
 
     pub fn new_version(&mut self) {
@@ -67,12 +67,12 @@ impl<ResourceType> ResourceEntry<ResourceType>
 where
     ResourceType: FGResource,
 {
-    pub fn new(id: usize, name: StringHandle, desc: ResourceType::Descriptor) -> Self {
+    pub fn new(handle: Handle, name: StringHandle, desc: ResourceType::Descriptor) -> Self {
         Self {
             resource: ResourceEntryState::Uninitialized(desc),
             info: VirtualResourceInfo {
                 name,
-                id,
+                handle,
                 ..Default::default()
             },
         }

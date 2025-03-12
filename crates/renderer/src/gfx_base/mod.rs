@@ -1,9 +1,11 @@
 mod allocator;
 mod common;
+mod handle;
 mod texture;
 
 pub use allocator::*;
 pub use common::*;
+pub use handle::*;
 pub use texture::*;
 
 use std::{hash::Hash, sync::Arc};
