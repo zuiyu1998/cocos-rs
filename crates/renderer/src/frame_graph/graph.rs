@@ -1,5 +1,4 @@
 use super::{
-    Allocator, FGResource, FGResourceDescriptor, TypeEquals,
     device_pass::DevicePass,
     handle::TypedHandle,
     pass::{PassNode, PassNodeInfo},
@@ -7,13 +6,16 @@ use super::{
     virtual_resources::{ResourceEntry, VirtualResource},
 };
 use crate::{
-    gfx_base::{LoadOp, StoreOp},
+    RendererError,
+    gfx_base::{Allocator, FGResource, FGResourceDescriptor, LoadOp, StoreOp, TypeEquals},
     utils::IndexHandle,
 };
 use std::mem::swap;
 
 pub type StringHandle = IndexHandle<String, u32>;
 pub type PassInsertPoint = u16;
+
+pub type DynRenderFn = dyn FnOnce() -> Result<(), RendererError>;
 
 pub struct FrameGraph {
     pub(crate) virtual_resources: Vec<Box<dyn VirtualResource>>,
@@ -145,8 +147,7 @@ impl FrameGraph {
                     .get_resource_node(attachment_info.texture_handle_index)
                     .get_info();
 
-                let info =
-                    self.virtual_resources[resource_node_info.virtual_resource_id].get_info();
+                let info = self.virtual_resources[resource_node_info.virtual_resource_id].info();
 
                 let last_pass_node_device_pass_id =
                     self.pass_nodes[info.last_pass_index.unwrap()].device_pass_id;
@@ -202,15 +203,15 @@ impl FrameGraph {
                 }
 
                 if attachment_info.load_op == LoadOp::Load {
-                    let info = self.virtual_resources[resource_node_info.virtual_resource_id]
-                        .get_mut_info();
+                    let info =
+                        self.virtual_resources[resource_node_info.virtual_resource_id].info_mut();
 
                     info.never_loaded = false;
                 }
 
                 if attachment_info.store_op == StoreOp::Store {
-                    let info = self.virtual_resources[resource_node_info.virtual_resource_id]
-                        .get_mut_info();
+                    let info =
+                        self.virtual_resources[resource_node_info.virtual_resource_id].info_mut();
 
                     info.never_stored = false;
                 }
@@ -251,14 +252,14 @@ impl FrameGraph {
             for resource_index in pass_node.reads.iter() {
                 let resource_node = &self.resource_nodes[*resource_index];
                 let resource = &mut self.virtual_resources[resource_node.virtual_resource_id];
-                resource.get_mut_info().update_lifetime(pass_node);
+                resource.info_mut().update_lifetime(pass_node);
             }
 
             //更新渲染节点吸入的资源节点所指向资源的生命周期
             for resource_index in pass_node.writes.iter() {
                 let resource_node = &self.resource_nodes[*resource_index];
                 let resource = &mut self.virtual_resources[resource_node.virtual_resource_id];
-                let info = resource.get_mut_info();
+                let info = resource.info_mut();
                 info.update_lifetime(pass_node);
                 info.writer_count += 1;
             }
@@ -269,7 +270,7 @@ impl FrameGraph {
         //更新pass_node中资源使用的索引顺序
         for resource_index in 0..self.virtual_resources.len() {
             let resource = &self.virtual_resources[resource_index];
-            let info = resource.get_info();
+            let info = resource.info();
             if info.first_pass_index.is_none() || info.last_pass_index.is_none() {
                 continue;
             }
@@ -347,7 +348,7 @@ impl FrameGraph {
         //更新资源节点对应的虚拟资源引用
         for resource_node in self.resource_nodes.iter() {
             let resource = &mut self.virtual_resources[resource_node.virtual_resource_id];
-            resource.get_mut_info().ref_count += 1;
+            resource.info_mut().ref_count += 1;
         }
     }
 
@@ -426,13 +427,13 @@ impl FrameGraph {
                         &mut self.resource_nodes[attachment_in_last_pass_node.texture_handle.index];
 
                     let write_count = self.virtual_resources[resource_node.virtual_resource_id]
-                        .get_info()
+                        .info()
                         .writer_count;
 
                     assert_eq!(write_count, 1);
 
                     self.virtual_resources[resource_node.virtual_resource_id]
-                        .get_mut_info()
+                        .info_mut()
                         .writer_count -= 1;
 
                     resource_node.reader_count += reader_count;
@@ -485,9 +486,7 @@ impl FrameGraph {
 
     ///指向已存在的资源
     pub fn create_resource_node_with_id(&mut self, virtual_resource_id: usize) -> usize {
-        let version = self.virtual_resources[virtual_resource_id]
-            .get_info()
-            .version;
+        let version = self.virtual_resources[virtual_resource_id].info().version;
         let index = self.resource_nodes.len();
 
         self.resource_nodes
@@ -497,8 +496,8 @@ impl FrameGraph {
     }
 
     pub fn create_resource_node(&mut self, virtual_resource: Box<dyn VirtualResource>) -> usize {
-        let id = virtual_resource.get_info().id;
-        let version = virtual_resource.get_info().version;
+        let id = virtual_resource.info().id;
+        let version = virtual_resource.info().version;
         self.virtual_resources.push(virtual_resource);
 
         let index = self.resource_nodes.len();

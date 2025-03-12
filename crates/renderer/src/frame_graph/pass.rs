@@ -1,11 +1,13 @@
 use crate::gfx_base::{PassBarrierPair, Rect, Viewport};
 
 use super::{
-    Allocator, DynRenderFn, FrameGraph, PassInsertPoint, StringHandle,
+    DynRenderFn, FrameGraph, PassInsertPoint, StringHandle,
     device_pass::LogicPass,
     render_target_attachment::{RenderTargetAttachment, RenderTargetAttachmentInfo},
     virtual_resources::VirtualResource,
 };
+
+use crate::gfx_base::Allocator;
 
 pub struct PassNode {
     ///渲染函数
@@ -59,7 +61,7 @@ impl PassNode {
     pub fn write(&mut self, graph: &mut FrameGraph, out_handle: usize) -> usize {
         let old_resour_node_info = graph.get_resource_node(out_handle).get_info();
         graph.virtual_resources[old_resour_node_info.virtual_resource_id]
-            .get_mut_info()
+            .info_mut()
             .new_version();
 
         let new_resour_node_handle =
@@ -87,7 +89,7 @@ impl PassNode {
         for resource_id in self.resource_request_array.iter() {
             let resource = &mut resources[*resource_id];
 
-            if !resource.get_info().imported {
+            if !resource.info().imported {
                 resource.request(allocator);
             }
         }
@@ -101,7 +103,7 @@ impl PassNode {
         for resource_id in self.resource_request_array.iter() {
             let resource = &mut resources[*resource_id];
 
-            if !resource.get_info().imported {
+            if !resource.info().imported {
                 resource.release(allocator);
             }
         }

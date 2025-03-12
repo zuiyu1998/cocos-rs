@@ -1,6 +1,6 @@
-use crate::gfx_base::{AccessFlags, LoadOp, StoreOp};
+use crate::gfx_base::{AccessFlags, LoadOp, StoreOp, Texture};
 
-use super::{Texture, handle::TypedHandle};
+use super::handle::TypedHandle;
 
 #[derive(Debug, Eq, PartialEq, Default)]
 pub struct RenderTargetAttachment {

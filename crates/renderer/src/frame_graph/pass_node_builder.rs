@@ -1,7 +1,5 @@
-use super::{
-    FGResource, FGResourceDescriptor, FrameGraph, StringHandle, TypeEquals, handle::TypedHandle,
-    pass::PassNode,
-};
+use super::{FrameGraph, StringHandle, handle::TypedHandle, pass::PassNode};
+use crate::gfx_base::{FGResource, FGResourceDescriptor, TypeEquals};
 
 pub struct PassNodeBuilder<'a> {
     pub pass_node: PassNode,

@@ -1,6 +1,8 @@
 use std::{mem::swap, sync::Arc};
 
-use super::{Allocator, AnyResource, FGResource, StringHandle, pass::PassNode};
+use super::{StringHandle, pass::PassNode};
+
+use crate::gfx_base::{Allocator, AnyFGResource, AnyResource, FGResource};
 
 #[derive(Default)]
 pub struct VirtualResourceInfo {
@@ -34,12 +36,13 @@ impl VirtualResourceInfo {
 
 ///资源
 pub trait VirtualResource {
-    fn get_info(&self) -> &VirtualResourceInfo;
-    fn get_mut_info(&mut self) -> &mut VirtualResourceInfo;
+    fn info(&self) -> &VirtualResourceInfo;
+    fn info_mut(&mut self) -> &mut VirtualResourceInfo;
+
     fn request(&mut self, allocator: &Allocator);
     fn release(&mut self, allocator: &Allocator);
 
-    fn get_any_resource(&self) -> Option<Arc<AnyResource>> {
+    fn get_any_resource(&self) -> Option<Arc<AnyFGResource>> {
         None
     }
 }
@@ -80,15 +83,18 @@ impl<ResourceType> VirtualResource for ResourceEntry<ResourceType>
 where
     ResourceType: FGResource,
 {
-    fn get_any_resource(&self) -> Option<Arc<AnyResource>> {
-        todo!()
+    fn get_any_resource(&self) -> Option<Arc<AnyFGResource>> {
+        match &self.resource {
+            ResourceEntryState::Uninitialized(_) => None,
+            ResourceEntryState::Initialization { resource, .. } => Some(resource.resource.clone()),
+        }
     }
 
-    fn get_info(&self) -> &VirtualResourceInfo {
+    fn info(&self) -> &VirtualResourceInfo {
         &self.info
     }
 
-    fn get_mut_info(&mut self) -> &mut VirtualResourceInfo {
+    fn info_mut(&mut self) -> &mut VirtualResourceInfo {
         &mut self.info
     }
 

@@ -1,9 +1,11 @@
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
-use crate::gfx_base::{INVALID_BINDING, PassBarrierPair, Rect, StoreOp, SubpassInfo, Viewport};
+use crate::gfx_base::{
+    AnyFGResource, INVALID_BINDING, PassBarrierPair, Rect, StoreOp, SubpassInfo, Viewport,
+};
 
 use super::{
-    AnyResource, DynRenderFn, FrameGraph,
+    DynRenderFn, FrameGraph,
     render_target_attachment::{
         RenderTargetAttachment, RenderTargetAttachmentInfo, RenderTargetAttachmentUsage,
     },
@@ -20,13 +22,13 @@ pub struct DevicePass {
 
 #[derive(Default)]
 pub struct DevicePassResourceTable {
-    reads: HashMap<usize, Arc<AnyResource>>,
-    writes: HashMap<usize, Arc<AnyResource>>,
+    reads: HashMap<usize, Arc<AnyFGResource>>,
+    writes: HashMap<usize, Arc<AnyFGResource>>,
 }
 pub fn extra_resource(
     graph: &FrameGraph,
     resource_indexes: &[usize],
-    to: &mut HashMap<usize, Arc<AnyResource>>,
+    to: &mut HashMap<usize, Arc<AnyFGResource>>,
 ) {
     for resource_index in resource_indexes.iter() {
         let resource_node = graph.get_resource_node(*resource_index);
@@ -74,7 +76,7 @@ pub struct LogicPass {
 
 pub struct Attachment {
     attachment: RenderTargetAttachment,
-    render_target: Arc<AnyResource>,
+    render_target: Arc<AnyFGResource>,
 }
 
 #[derive(Default)]
@@ -170,7 +172,7 @@ impl DevicePass {
                 .get_any_resource()
                 .unwrap();
 
-            assert!(resource.resource.is_texture());
+            assert!(resource.is_texture());
 
             let attachment = Attachment {
                 attachment,
