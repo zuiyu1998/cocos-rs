@@ -49,7 +49,7 @@ pub struct PassNodeInfo {
 }
 
 impl PassNode {
-    pub fn take(&mut self) -> LogicPass {
+    pub(crate) fn take(&mut self) -> LogicPass {
         LogicPass {
             custom_viewport: self.custom_viewport,
             viewport: self.viewport.take(),
@@ -59,7 +59,7 @@ impl PassNode {
     }
 
     ///根据旧的资源节点创建新的资源节点，并记录新节点的handle
-    pub fn write(&mut self, graph: &mut FrameGraph, out_handle: Handle) -> Handle {
+    pub(crate) fn write(&mut self, graph: &mut FrameGraph, out_handle: Handle) -> Handle {
         let old_resour_node_info = graph.get_resource_node(out_handle).to_info();
         graph
             .get_resource_mut(old_resour_node_info.virtual_resource_handle)
@@ -70,15 +70,14 @@ impl PassNode {
             old_resour_node_info.virtual_resource_handle,
         );
 
-        graph.resource_nodes[new_resour_node_handle].pass_node_writer_handle =
-            Some(new_resour_node_handle);
+        graph.resource_nodes[new_resour_node_handle].set_pass_node_writer_handle(self.handle);
 
         self.writes.push(new_resour_node_handle);
 
         new_resour_node_handle
     }
 
-    pub fn read(&mut self, input_handle: Handle) {
+    pub(crate) fn read(&mut self, input_handle: Handle) {
         if !self.reads.contains(&input_handle) {
             self.reads.push(input_handle);
         }
@@ -98,7 +97,7 @@ impl PassNode {
         }
     }
 
-    pub fn release_transient_resources(
+    pub(crate) fn release_transient_resources(
         &mut self,
         allocator: &Allocator,
         resources: &mut [Box<dyn VirtualResource>],

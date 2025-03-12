@@ -1,12 +1,20 @@
 use super::{FrameGraph, StringHandle, pass::PassNode};
-use crate::gfx_base::{FGResource, FGResourceDescriptor, TypeEquals, TypedHandle};
+use crate::gfx_base::{FGResource, FGResourceDescriptor, Handle, TypeEquals, TypedHandle};
 
 pub struct PassNodeBuilder<'a> {
-    pub pass_node: PassNode,
-    pub graph: &'a mut FrameGraph,
+    pass_node: PassNode,
+    graph: &'a mut FrameGraph,
 }
 
-impl PassNodeBuilder<'_> {
+impl<'a> PassNodeBuilder<'a> {
+    pub fn new(pass_node: PassNode, graph: &'a mut FrameGraph) -> Self {
+        Self { pass_node, graph }
+    }
+
+    pub fn set_side_effect(&mut self, side_effect: bool) {
+        self.pass_node.side_effect = side_effect
+    }
+
     pub fn create<DescriptorType>(
         &mut self,
         name: StringHandle,
@@ -18,8 +26,10 @@ impl PassNodeBuilder<'_> {
         self.graph.create(name, desc)
     }
 
-    pub fn build(self) {
+    pub fn build(self) -> Handle {
+        let handle = self.pass_node.handle;
         self.graph.create_pass_node(self.pass_node);
+        handle
     }
 
     pub fn read<Resource: FGResource>(

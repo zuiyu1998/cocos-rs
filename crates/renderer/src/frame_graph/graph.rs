@@ -1,5 +1,5 @@
 use super::{
-    device_pass::DevicePass,
+    device_pass::{DevicePass, LogicPass},
     pass::{PassNode, PassNodeInfo},
     pass_node_builder::PassNodeBuilder,
     virtual_resources::{ResourceEntry, VirtualResource},
@@ -22,13 +22,21 @@ pub type DynRenderFn = dyn FnOnce() -> Result<(), RendererError>;
 pub struct FrameGraph {
     virtual_resources: Vec<Box<dyn VirtualResource>>,
     pub(crate) resource_nodes: Vec<ResourceNode>,
-    pub(crate) pass_nodes: Vec<PassNode>,
+    pass_nodes: Vec<PassNode>,
     pub(crate) merge: bool,
     pub(crate) device_passes: Vec<DevicePass>,
     pub(crate) allocator: Allocator,
 }
 
 impl FrameGraph {
+    pub fn take_pass_node(&mut self, pass_node_handle: Handle) -> LogicPass {
+        self.pass_nodes[pass_node_handle].take()
+    }
+
+    pub fn get_pass_node(&self, pass_node_handle: Handle) -> &PassNode {
+        &self.pass_nodes[pass_node_handle]
+    }
+
     pub fn new(allocator: Allocator) -> Self {
         Self {
             virtual_resources: vec![],
@@ -57,15 +65,13 @@ impl FrameGraph {
     ) -> PassNodeBuilder {
         let pass_node = PassNode::new(insert_point, name, Handle::new(self.pass_nodes.len()));
 
-        PassNodeBuilder {
-            pass_node,
-            graph: self,
-        }
+        PassNodeBuilder::new(pass_node, self)
     }
 
-    pub fn create_pass_node(&mut self, pass: PassNode) {
+    pub(crate) fn create_pass_node(&mut self, pass: PassNode) {
         self.pass_nodes.push(pass);
     }
+
     pub fn release_transient_resources(&mut self, pass_node_handle: Handle) {
         let pass_node = &mut self.pass_nodes[pass_node_handle];
         pass_node.release_transient_resources(&self.allocator, &mut self.virtual_resources);
@@ -334,15 +340,15 @@ impl FrameGraph {
                 pass_node.ref_count += 1;
             }
 
-            for resource_index in pass_node.reads.iter() {
-                let resource_node = &mut self.resource_nodes[*resource_index];
+            for resource_node_handle in pass_node.reads.iter() {
+                let resource_node = &mut self.resource_nodes[*resource_node_handle];
                 resource_node.reader_count += 1;
             }
         }
 
         let mut resource_handle_stack: Vec<Handle> = vec![];
 
-        //记录所有要被剔除的资源节点
+        //记录所有只有写入状态的资源节点
         for resource_node_info in self.resource_nodes.iter().map(|node| node.to_info()) {
             if resource_node_info.reader_count == 0
                 && resource_node_info.pass_node_writer_handle.is_some()
@@ -376,7 +382,7 @@ impl FrameGraph {
         //更新资源节点对应的虚拟资源引用
         for resource_node in self.resource_nodes.iter() {
             let resource = &mut self.virtual_resources[resource_node.virtual_resource_handle];
-            resource.info_mut().ref_count += 1;
+            resource.info_mut().ref_count += resource_node.reader_count;
         }
     }
 
@@ -549,7 +555,8 @@ pub struct ResourceNode {
     pub virtual_resource_handle: Handle,
     version: u8,
     reader_count: u32,
-    pub pass_node_writer_handle: Option<Handle>,
+    //当前写入资源的渲染节点索引
+    pass_node_writer_handle: Option<Handle>,
     pub handle: Handle,
 }
 
@@ -562,6 +569,10 @@ pub struct ResourceNodeInfo {
 }
 
 impl ResourceNode {
+    pub fn set_pass_node_writer_handle(&mut self, pass_node_writer_handle: Handle) {
+        self.pass_node_writer_handle = Some(pass_node_writer_handle)
+    }
+
     pub fn to_info(&self) -> ResourceNodeInfo {
         ResourceNodeInfo {
             virtual_resource_handle: self.virtual_resource_handle,
@@ -580,5 +591,113 @@ impl ResourceNode {
             pass_node_writer_handle: None,
             handle,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::FrameGraph;
+    use crate::{
+        gfx_base::{
+            Allocator, Handle, Texture, TextureDescriptor, TypedHandle, test::TestResourceCreator,
+        },
+        utils::IndexHandle,
+    };
+
+    pub fn get_graph() -> (FrameGraph, TypedHandle<Texture>) {
+        let mut graph = FrameGraph::new(Allocator::new(TestResourceCreator {}));
+
+        let depth_buffer = graph.create(
+            IndexHandle::new("depth_buffer".to_string(), 0),
+            TextureDescriptor { width: 10 },
+        );
+
+        let mut depth_pass =
+            graph.create_pass_node_builder(IndexHandle::new("depth_pass".to_string(), 1), 3);
+        let new_depth_buffer = depth_pass.write(depth_buffer.clone());
+
+        depth_pass.build();
+
+        let gbuffer1 = graph.create(
+            IndexHandle::new("gbuffer1".to_string(), 2),
+            TextureDescriptor { width: 12 },
+        );
+        let gbuffer2 = graph.create(
+            IndexHandle::new("gbuffer2".to_string(), 3),
+            TextureDescriptor { width: 13 },
+        );
+        let gbuffer3 = graph.create(
+            IndexHandle::new("gbuffer3".to_string(), 4),
+            TextureDescriptor { width: 14 },
+        );
+
+        let light_buffer = graph.create(
+            IndexHandle::new("light_buffer".to_string(), 5),
+            TextureDescriptor { width: 15 },
+        );
+
+        let mut light_pass =
+            graph.create_pass_node_builder(IndexHandle::new("light".to_string(), 6), 2);
+
+        light_pass.set_side_effect(true);
+
+        light_pass.read(new_depth_buffer);
+        light_pass.read(gbuffer1);
+        light_pass.read(gbuffer2);
+        light_pass.read(gbuffer3);
+
+        let new_light_buffer = light_pass.write(light_buffer);
+
+        light_pass.build();
+
+        let backend_buffer = graph.create(
+            IndexHandle::new("backend_buffer".to_string(), 7),
+            TextureDescriptor { width: 16 },
+        );
+
+        let mut post_pass =
+            graph.create_pass_node_builder(IndexHandle::new("post".to_string(), 8), 1);
+
+        post_pass.read(new_light_buffer);
+        post_pass.write(backend_buffer);
+
+        post_pass.build();
+
+        let only_write_buffer = graph.create(
+            IndexHandle::new("backend_buffer".to_string(), 9),
+            TextureDescriptor { width: 17 },
+        );
+
+        //cull
+        let mut only_write_pass =
+            graph.create_pass_node_builder(IndexHandle::new("only_write".to_string(), 10), 4);
+
+        let new_only_write_buffer = only_write_pass.write(only_write_buffer);
+        only_write_pass.build();
+
+        (graph, new_only_write_buffer)
+    }
+
+    #[test]
+    fn test_graph() {
+        let (mut graph, only_write_buffer) = get_graph();
+        graph.sort();
+
+        assert_eq!(1, graph.pass_nodes[0].insert_point);
+
+        graph.cull();
+
+        let resource_node = graph.get_resource_node(only_write_buffer.handle());
+
+        assert_eq!(
+            0,
+            graph
+                .get_resource(resource_node.virtual_resource_handle)
+                .info()
+                .ref_count
+        );
+
+        assert_eq!(1, graph.get_pass_node(Handle::new(0)).ref_count);
+        assert_eq!(2, graph.get_pass_node(Handle::new(1)).ref_count);
     }
 }
