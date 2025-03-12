@@ -8,6 +8,7 @@ pub use texture::*;
 
 use std::{hash::Hash, sync::Arc};
 
+#[derive(PartialEq, Eq, Debug)]
 pub enum AnyFGResource {
     Texture(Texture),
 }

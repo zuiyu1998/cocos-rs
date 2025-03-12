@@ -1,11 +1,17 @@
 use super::{AnyFGResource, AnyFGResourceDescriptor, FGResource, FGResourceDescriptor};
 
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Default)]
 pub struct Texture {
     desc: TextureDescriptor,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+impl Texture {
+    pub fn new(desc: TextureDescriptor) -> Self {
+        Texture { desc }
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct TextureDescriptor {
     pub width: u32,
 }
