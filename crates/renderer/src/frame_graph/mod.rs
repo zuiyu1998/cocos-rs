@@ -1,3 +1,4 @@
+pub mod black_board;
 pub mod device_pass;
 pub mod graph;
 pub mod pass;
