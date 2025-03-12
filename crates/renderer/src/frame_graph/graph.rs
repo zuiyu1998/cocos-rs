@@ -29,6 +29,17 @@ pub struct FrameGraph {
 }
 
 impl FrameGraph {
+    pub fn new(allocator: Allocator) -> Self {
+        Self {
+            virtual_resources: vec![],
+            resource_nodes: vec![],
+            pass_nodes: vec![],
+            merge: false,
+            device_passes: vec![],
+            allocator,
+        }
+    }
+
     pub fn execute(&mut self) {
         let mut temp: Vec<DevicePass> = vec![];
 
@@ -506,7 +517,10 @@ impl FrameGraph {
         handle
     }
 
-    pub fn create_resource_node(&mut self, virtual_resource: Box<dyn VirtualResource>) -> Handle {
+    pub(crate) fn create_resource_node(
+        &mut self,
+        virtual_resource: Box<dyn VirtualResource>,
+    ) -> Handle {
         let virtual_resource_handle = virtual_resource.info().handle;
         let version = virtual_resource.info().version;
         self.virtual_resources.push(virtual_resource);
