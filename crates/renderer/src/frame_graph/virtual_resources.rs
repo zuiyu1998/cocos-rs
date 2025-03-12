@@ -35,7 +35,7 @@ impl VirtualResourceInfo {
 }
 
 ///资源
-pub trait VirtualResource {
+pub trait VirtualResource: 'static {
     fn info(&self) -> &VirtualResourceInfo;
     fn info_mut(&mut self) -> &mut VirtualResourceInfo;
 

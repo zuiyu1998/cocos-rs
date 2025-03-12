@@ -20,7 +20,7 @@ pub type PassInsertPoint = u16;
 pub type DynRenderFn = dyn FnOnce() -> Result<(), RendererError>;
 
 pub struct FrameGraph {
-    pub(crate) virtual_resources: Vec<Box<dyn VirtualResource>>,
+    virtual_resources: Vec<Box<dyn VirtualResource>>,
     pub(crate) resource_nodes: Vec<ResourceNode>,
     pub(crate) pass_nodes: Vec<PassNode>,
     pub(crate) merge: bool,
@@ -246,6 +246,14 @@ impl FrameGraph {
 
     pub fn get_resource_node(&self, handle: Handle) -> &ResourceNode {
         &self.resource_nodes[handle]
+    }
+
+    pub fn get_resource(&self, handle: Handle) -> &dyn VirtualResource {
+        self.virtual_resources[handle.index()].as_ref()
+    }
+
+    pub fn get_resource_mut(&mut self, handle: Handle) -> &mut dyn VirtualResource {
+        self.virtual_resources[handle.index()].as_mut()
     }
 
     pub fn get_resource_node_with_version(
@@ -505,7 +513,10 @@ impl FrameGraph {
     }
 
     ///指向已存在的资源
-    pub fn create_resource_node_with_id(&mut self, virtual_resource_handle: Handle) -> Handle {
+    pub fn create_resource_node_with_virtual_resource_handle(
+        &mut self,
+        virtual_resource_handle: Handle,
+    ) -> Handle {
         let version = self.virtual_resources[virtual_resource_handle]
             .info()
             .version;

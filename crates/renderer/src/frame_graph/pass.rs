@@ -58,14 +58,17 @@ impl PassNode {
         }
     }
 
+    ///根据旧的资源节点创建新的资源节点，并记录新节点的handle
     pub fn write(&mut self, graph: &mut FrameGraph, out_handle: Handle) -> Handle {
         let old_resour_node_info = graph.get_resource_node(out_handle).to_info();
-        graph.virtual_resources[old_resour_node_info.virtual_resource_handle]
+        graph
+            .get_resource_mut(old_resour_node_info.virtual_resource_handle)
             .info_mut()
             .new_version();
 
-        let new_resour_node_handle =
-            graph.create_resource_node_with_id(old_resour_node_info.virtual_resource_handle);
+        let new_resour_node_handle = graph.create_resource_node_with_virtual_resource_handle(
+            old_resour_node_info.virtual_resource_handle,
+        );
 
         graph.resource_nodes[new_resour_node_handle].pass_node_writer_handle =
             Some(new_resour_node_handle);
@@ -225,6 +228,28 @@ mod test {
     use super::PassNode;
 
     #[test]
+    fn test_write() {
+        let mut graph = FrameGraph::new(Allocator::new(TestResourceCreator {}));
+        let handle = graph.create(
+            IndexHandle::new("2".to_string(), 0),
+            TextureDescriptor::default(),
+        );
+
+        let mut pass_node = PassNode::new(0, IndexHandle::new("a".to_string(), 1), Handle::new(0));
+
+        let new_resource_handle = pass_node.write(&mut graph, handle.handle());
+
+        let new_resource_node_info = graph.get_resource_node(new_resource_handle).to_info();
+        let version = graph
+            .get_resource(new_resource_node_info.virtual_resource_handle)
+            .info()
+            .version;
+
+        assert_eq!(version, 1);
+        assert_eq!(new_resource_node_info.handle, Handle::new(1));
+    }
+
+    #[test]
     fn test_can_merge() {
         let mut graph = FrameGraph::new(Allocator::new(TestResourceCreator {}));
 
@@ -237,7 +262,7 @@ mod test {
         assert!(!pass_node_a.can_merge(&graph, &pass_node_b));
 
         let handle = graph.create(
-            IndexHandle::new("b".to_string(), 2),
+            IndexHandle::new("c".to_string(), 2),
             TextureDescriptor::default(),
         );
 

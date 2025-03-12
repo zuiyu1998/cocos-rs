@@ -33,8 +33,9 @@ pub fn extra_resource(
     for resource_index in resource_indexes.iter() {
         let resource_node = graph.get_resource_node(*resource_index);
 
-        if let Some(resource) =
-            graph.virtual_resources[resource_node.virtual_resource_handle].get_any_resource()
+        if let Some(resource) = graph
+            .get_resource(resource_node.virtual_resource_handle)
+            .get_any_resource()
         {
             to.insert(*resource_index, resource);
         }
@@ -168,7 +169,8 @@ impl DevicePass {
 
         for attachment in attachments.into_iter() {
             let resource_node = graph.get_resource_node(attachment.to_info().texture_handle);
-            let resource = graph.virtual_resources[resource_node.virtual_resource_handle]
+            let resource = graph
+                .get_resource(resource_node.virtual_resource_handle)
                 .get_any_resource()
                 .unwrap();
 
