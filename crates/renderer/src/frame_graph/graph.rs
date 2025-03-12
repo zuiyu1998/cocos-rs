@@ -73,7 +73,7 @@ impl FrameGraph {
         let pass_node_info = self
             .pass_nodes
             .iter()
-            .map(|pass_node| pass_node.get_info())
+            .map(|pass_node| pass_node.to_info())
             .collect::<Vec<PassNodeInfo>>();
 
         for pass_node_info in pass_node_info.into_iter() {
@@ -135,7 +135,7 @@ impl FrameGraph {
         let mut resource_ids = vec![];
 
         for pass_node_index in 0..self.pass_nodes.len() {
-            let pass_node_info = self.pass_nodes[pass_node_index].get_info();
+            let pass_node_info = self.pass_nodes[pass_node_index].to_info();
             if pass_node_info.ref_count == 0 {
                 continue;
             }
@@ -178,7 +178,7 @@ impl FrameGraph {
                         let write_pass_node_info = self.pass_nodes[new_version_resource_node_info
                             .pass_node_writer_index
                             .unwrap()]
-                        .get_info();
+                        .to_info();
 
                         if write_pass_node_info.device_pass_id == pass_node_info.device_pass_id {
                             self.pass_nodes[pass_node_index].attachments[attachment_index]

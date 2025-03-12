@@ -15,7 +15,7 @@ pub struct RenderTargetAttachment {
 impl RenderTargetAttachment {
     pub const DEPTH_STENCIL_SLOT_START: u8 = 13;
 
-    pub fn get_info(&self) -> RenderTargetAttachmentInfo {
+    pub fn to_info(&self) -> RenderTargetAttachmentInfo {
         RenderTargetAttachmentInfo {
             texture_handle_index: self.texture_handle.index,
             store_op: self.store_op,

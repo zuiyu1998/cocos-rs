@@ -209,7 +209,7 @@ impl DevicePass {
                 [pass_node_index]
                 .attachments
                 .iter()
-                .map(|attachment| attachment.get_info())
+                .map(|attachment| attachment.to_info())
                 .collect();
 
             for attachment_info in attachment_infos.iter() {
@@ -300,13 +300,13 @@ impl DevicePass {
         let (last_attachment, last_attachment_info, last_attachment_index) = {
             if let Some((attachment_index, attachment)) =
                 attachments.iter().enumerate().find(|(_index, attachment)| {
-                    let info = attachment.get_info();
+                    let info = attachment.to_info();
                     info.usage == usage && info.slot as u32 == slot
                 })
             {
                 (
                     attachment_index + 1 == attachments.len(),
-                    Some(attachment.get_info()),
+                    Some(attachment.to_info()),
                     Some(attachment_index),
                 )
             } else {
@@ -332,7 +332,7 @@ impl DevicePass {
                 self.used_render_target_slot_mask |= 1 << attachment.desc.slot;
             }
 
-            out_attachment_info = attachment.get_info();
+            out_attachment_info = attachment.to_info();
 
             attachments.push(attachment);
         } else {
@@ -350,7 +350,7 @@ impl DevicePass {
                         attachment_info.end_accesses;
                 }
 
-                out_attachment_info = attachments[last_attachment_index].get_info();
+                out_attachment_info = attachments[last_attachment_index].to_info();
             } else {
                 let mut attachment = RenderTargetAttachment::default();
                 for i in 0..RenderTargetAttachment::DEPTH_STENCIL_SLOT_START {
@@ -359,7 +359,7 @@ impl DevicePass {
                         self.used_render_target_slot_mask |= 1 << i;
                     }
                 }
-                out_attachment_info = attachment.get_info();
+                out_attachment_info = attachment.to_info();
                 attachments.push(attachment);
             }
         }

@@ -109,7 +109,7 @@ impl PassNode {
         }
     }
 
-    pub fn get_info(&self) -> PassNodeInfo {
+    pub fn to_info(&self) -> PassNodeInfo {
         PassNodeInfo {
             ref_count: self.ref_count,
             subpass: self.subpass,
@@ -117,7 +117,7 @@ impl PassNode {
             attachments_infos: self
                 .attachments
                 .iter()
-                .map(|attachment| attachment.get_info())
+                .map(|attachment| attachment.to_info())
                 .collect(),
             id: self.id,
         }
