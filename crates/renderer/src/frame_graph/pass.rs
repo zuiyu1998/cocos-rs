@@ -167,7 +167,7 @@ impl PassNode {
         })
     }
 
-    pub fn get_render_target_attachment_index(
+    pub fn get_render_target_attachment_with_virtual_resource_handle(
         &self,
         graph: &FrameGraph,
         virtual_resource_handle: Handle,
@@ -211,5 +211,47 @@ impl PassNode {
             scissor: None,
             barriers: Default::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        frame_graph::{FrameGraph, render_target_attachment::RenderTargetAttachment},
+        gfx_base::{Allocator, Handle, TextureDescriptor, test::TestResourceCreator},
+        utils::IndexHandle,
+    };
+
+    use super::PassNode;
+
+    #[test]
+    fn test_can_merge() {
+        let mut graph = FrameGraph::new(Allocator::new(TestResourceCreator {}));
+
+        let mut pass_node_a =
+            PassNode::new(0, IndexHandle::new("a".to_string(), 0), Handle::new(0));
+        let mut pass_node_b =
+            PassNode::new(0, IndexHandle::new("b".to_string(), 1), Handle::new(1));
+
+        pass_node_a.has_cleared_attachment = true;
+        assert!(!pass_node_a.can_merge(&graph, &pass_node_b));
+
+        let handle = graph.create(
+            IndexHandle::new("b".to_string(), 2),
+            TextureDescriptor::default(),
+        );
+
+        pass_node_a.has_cleared_attachment = false;
+        pass_node_a.attachments.push(RenderTargetAttachment {
+            texture_handle: handle.clone(),
+            ..Default::default()
+        });
+
+        pass_node_b.attachments.push(RenderTargetAttachment {
+            texture_handle: handle,
+            ..Default::default()
+        });
+
+        assert!(pass_node_a.can_merge(&graph, &pass_node_b));
     }
 }

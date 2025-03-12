@@ -208,7 +208,7 @@ impl FrameGraph {
                                 [new_version_resource_node_info
                                     .pass_node_writer_handle
                                     .unwrap()]
-                            .get_render_target_attachment_index(
+                            .get_render_target_attachment_with_virtual_resource_handle(
                                 self,
                                 new_version_resource_node_info.virtual_resource_handle,
                             ) {
