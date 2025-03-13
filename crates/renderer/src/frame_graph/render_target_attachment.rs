@@ -51,7 +51,6 @@ pub struct RenderTargetAttachmentDescriptor {
     pub slot: u8,
     pub write_mask: u8,
     pub load_op: LoadOp,
-
     pub end_accesses: AccessFlags,
 }
 

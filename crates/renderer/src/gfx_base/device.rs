@@ -25,20 +25,20 @@ impl ResourceCreator for Device {
 
 pub struct Device(Box<dyn DeviceTrait>);
 
-impl DeviceTrait for Device {
-    fn get_command_buffer_mut(&mut self) -> &mut CommandBuffer {
+impl Device {
+    pub fn get_command_buffer_mut(&mut self) -> &mut CommandBuffer {
         self.0.get_command_buffer_mut()
     }
 
-    fn create_texture(&self, desc: TextureDescriptor) -> Texture {
+    pub fn create_texture(&self, desc: TextureDescriptor) -> Texture {
         self.0.create_texture(desc)
     }
 
-    fn create_buffer(&self, desc: BufferDescriptor) -> Buffer {
+    pub fn create_buffer(&self, desc: BufferDescriptor) -> Buffer {
         self.0.create_buffer(desc)
     }
 
-    fn create_render_pass(&self, desc: RenderPassDescriptor) -> RenderPass {
+    pub fn create_render_pass(&self, desc: RenderPassDescriptor) -> RenderPass {
         self.0.create_render_pass(desc)
     }
 }

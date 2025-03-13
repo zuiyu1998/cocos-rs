@@ -93,7 +93,9 @@ pub mod test {
     pub struct TestTexture;
 
     impl TextureTrait for TestTexture {
-        fn test(&self) {}
+        fn get_format(&self) -> crate::gfx_base::Format {
+            todo!()
+        }
     }
 
     pub struct TestResourceCreator {}

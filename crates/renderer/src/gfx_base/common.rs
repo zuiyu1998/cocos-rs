@@ -2,6 +2,13 @@ use bitflags::bitflags;
 
 pub const INVALID_BINDING: u32 = 0;
 
+pub struct Color {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub w: f32,
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct SubpassDependency {
     pub src_subpass: u32,
@@ -127,11 +134,23 @@ pub struct SubpassInfo {
     pub resolves: Vec<u32>,
     pub preserves: Vec<u32>,
 }
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Viewport {}
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct Viewport {
+    pub left: i32,
+    pub top: i32,
+    pub width: u32,
+    pub height: u32,
+    pub min_depth: f32,
+    pub max_depth: f32,
+}
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct Rect {}
+pub struct Rect {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
 
 #[derive(Debug, Default, Clone)]
 pub struct PassBarrierPair {}

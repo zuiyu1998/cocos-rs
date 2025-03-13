@@ -21,6 +21,15 @@ pub enum AnyFGResource {
     Buffer(Buffer),
 }
 
+impl AnyFGResource {
+    pub fn get_texture(&self) -> Option<&Texture> {
+        match self {
+            AnyFGResource::Texture(resource) => Some(resource),
+            _ => None,
+        }
+    }
+}
+
 impl From<Texture> for AnyFGResource {
     fn from(value: Texture) -> Self {
         AnyFGResource::Texture(value)

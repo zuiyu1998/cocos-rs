@@ -1,8 +1,8 @@
 use std::{cmp::Ordering, rc::Rc};
 
 use crate::gfx_base::{
-    AnyFGResource, CommandBuffer, DeviceTrait, Handle, INVALID_BINDING, PassBarrierPair, Rect,
-    StoreOp, SubpassInfo, Viewport,
+    AnyFGResource, CommandBuffer, Handle, INVALID_BINDING, PassBarrierPair, Rect, StoreOp,
+    SubpassInfo, Viewport,
 };
 
 use super::{
@@ -125,7 +125,6 @@ impl DevicePass {
         }
 
         //todo renderTargets
-
         for attachment in attachments.into_iter() {
             let resource_node = graph.get_resource_node(attachment.to_info().texture_handle);
             let resource = graph
@@ -352,7 +351,7 @@ impl DevicePass {
     pub fn execute(&mut self, params: &mut FrameGraphExecutionParams) {
         let cmd_buffer = params.device.get_command_buffer_mut();
 
-        self.begin(cmd_buffer);
+        // self.begin(cmd_buffer, &params.device);
 
         let subpass_len = self.subpasses.len();
 
@@ -401,7 +400,62 @@ impl DevicePass {
         //todo
     }
     pub fn begin(&mut self, _cmd_buffer: &mut CommandBuffer) {
-        //todo
+        if self.subpasses.is_empty() {
+            return;
+        }
+
+        let mut has_default_viewport = false;
+
+        for subpass in self.subpasses.iter() {
+            for logic_pass in subpass.logic_passes.iter() {
+                if logic_pass.viewport.is_none() {
+                    has_default_viewport = true;
+                    break;
+                }
+            }
+        }
+
+        if has_default_viewport {
+            self.viewport = Viewport::default();
+            self.scissor = Rect {
+                x: 0,
+                y: 0,
+                width: u32::MAX,
+                height: u32::MAX,
+            }
+        } else {
+            self.scissor = Rect {
+                x: i32::MAX,
+                y: i32::MAX,
+                width: 0,
+                height: 0,
+            };
+
+            //合并viewport
+            for subpass in self.subpasses.iter() {
+                for logic_pass in subpass.logic_passes.iter() {
+                    if let Some(viewport) = logic_pass.viewport.as_ref() {
+                        let x = self.scissor.x.min(viewport.left);
+                        self.viewport.left = x;
+                        self.scissor.x = x;
+
+                        let y = self.scissor.y.min(viewport.top);
+                        self.viewport.top = y;
+                        self.scissor.y = y;
+
+                        let width = viewport.width as i32 + viewport.left - self.scissor.x;
+                        let width = self.scissor.width.max(width as u32);
+                        self.scissor.width = width;
+                        self.viewport.width = width;
+
+                        let height = viewport.height as i32 + viewport.top - self.scissor.y;
+                        let height = self.scissor.height.max(height as u32);
+                        self.scissor.height = height;
+                        self.viewport.height = height;
+                    }
+                }
+            }
+        }
     }
 
     pub fn end(&mut self, _cmd_buffer: &mut CommandBuffer) {

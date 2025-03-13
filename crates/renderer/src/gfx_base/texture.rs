@@ -6,11 +6,17 @@ use super::{
 };
 
 pub trait TextureTrait: 'static + Debug {
-    fn test(&self);
+    fn get_format(&self) -> Format;
 }
 
 #[derive(Debug)]
 pub struct Texture(Box<dyn TextureTrait>);
+
+impl Texture {
+    pub fn get_format(&self) -> Format {
+        self.0.get_format()
+    }
+}
 
 impl PartialEq for Texture {
     fn eq(&self, other: &Self) -> bool {
