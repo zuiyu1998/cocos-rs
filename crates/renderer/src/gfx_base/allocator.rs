@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use super::{AnyFGResource, AnyFGResourceDescriptor, AnyResource};
 
-pub trait ResourceCreator: 'static + Send + Sync {
+pub trait ResourceCreator: 'static {
     fn create(&self, desc: AnyFGResourceDescriptor) -> AnyFGResource;
 }
 

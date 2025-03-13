@@ -1,10 +1,38 @@
-use super::{Rect, Viewport};
+use super::{
+    AnyFGResource, AnyFGResourceDescriptor, Buffer, BufferDescriptor, Rect, ResourceCreator,
+    Texture, TextureDescriptor, Viewport,
+};
 
-pub struct Device {}
+pub trait DeviceTrait: 'static {
+    fn get_command_buffer_mut(&mut self) -> &mut CommandBuffer;
 
-impl Device {
-    pub fn get_command_buffer_mut(&self) -> &mut CommandBuffer {
-        todo!()
+    fn create_texture(&self, desc: TextureDescriptor) -> Texture;
+
+    fn create_buffer(&self, desc: BufferDescriptor) -> Buffer;
+}
+
+impl ResourceCreator for Device {
+    fn create(&self, desc: AnyFGResourceDescriptor) -> AnyFGResource {
+        match desc {
+            AnyFGResourceDescriptor::Texture(desc) => self.create_texture(desc).into(),
+            AnyFGResourceDescriptor::Buffer(desc) => self.create_buffer(desc).into(),
+        }
+    }
+}
+
+pub struct Device(Box<dyn DeviceTrait>);
+
+impl DeviceTrait for Device {
+    fn get_command_buffer_mut(&mut self) -> &mut CommandBuffer {
+        self.0.get_command_buffer_mut()
+    }
+
+    fn create_texture(&self, desc: TextureDescriptor) -> Texture {
+        self.0.create_texture(desc)
+    }
+
+    fn create_buffer(&self, desc: BufferDescriptor) -> Buffer {
+        self.0.create_buffer(desc)
     }
 }
 

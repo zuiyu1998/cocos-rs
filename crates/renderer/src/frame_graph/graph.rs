@@ -54,7 +54,7 @@ impl FrameGraph {
         }
     }
 
-    pub fn execute(&mut self, params: &FrameGraphExecutionParams) {
+    pub fn execute(&mut self, params: &mut FrameGraphExecutionParams) {
         let mut temp: Vec<DevicePass> = vec![];
 
         swap(&mut temp, &mut self.device_passes);

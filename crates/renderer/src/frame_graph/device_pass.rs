@@ -1,8 +1,8 @@
 use std::{cmp::Ordering, rc::Rc};
 
 use crate::gfx_base::{
-    AnyFGResource, CommandBuffer, Handle, INVALID_BINDING, PassBarrierPair, Rect, StoreOp,
-    SubpassInfo, Viewport,
+    AnyFGResource, CommandBuffer, DeviceTrait, Handle, INVALID_BINDING, PassBarrierPair, Rect,
+    StoreOp, SubpassInfo, Viewport,
 };
 
 use super::{
@@ -349,7 +349,7 @@ impl DevicePass {
         }
     }
 
-    pub fn execute(&mut self, params: &FrameGraphExecutionParams) {
+    pub fn execute(&mut self, params: &mut FrameGraphExecutionParams) {
         let cmd_buffer = params.device.get_command_buffer_mut();
 
         self.begin(cmd_buffer);
