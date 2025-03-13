@@ -608,18 +608,48 @@ mod test {
     pub fn get_graph() -> (FrameGraph, TypedHandle<Texture>) {
         let mut graph = FrameGraph::new(Allocator::new(TestResourceCreator {}));
 
-        let depth_buffer = graph.create("depth_buffer", TextureDescriptor { width: 10 });
+        let depth_buffer = graph.create(
+            "depth_buffer",
+            TextureDescriptor {
+                width: 10,
+                ..Default::default()
+            },
+        );
 
         let mut depth_pass = graph.create_pass_node_builder("depth_pass", 3);
         let new_depth_buffer = depth_pass.write(depth_buffer.clone());
 
         depth_pass.build();
 
-        let gbuffer1 = graph.create("gbuffer1", TextureDescriptor { width: 12 });
-        let gbuffer2 = graph.create("gbuffer2", TextureDescriptor { width: 13 });
-        let gbuffer3 = graph.create("gbuffer3", TextureDescriptor { width: 14 });
+        let gbuffer1 = graph.create(
+            "gbuffer1",
+            TextureDescriptor {
+                width: 12,
+                ..Default::default()
+            },
+        );
+        let gbuffer2 = graph.create(
+            "gbuffer2",
+            TextureDescriptor {
+                width: 13,
+                ..Default::default()
+            },
+        );
+        let gbuffer3 = graph.create(
+            "gbuffer3",
+            TextureDescriptor {
+                width: 14,
+                ..Default::default()
+            },
+        );
 
-        let light_buffer = graph.create("light_buffer", TextureDescriptor { width: 15 });
+        let light_buffer = graph.create(
+            "light_buffer",
+            TextureDescriptor {
+                width: 15,
+                ..Default::default()
+            },
+        );
 
         let mut light_pass = graph.create_pass_node_builder("light", 2);
 
@@ -634,7 +664,13 @@ mod test {
 
         light_pass.build();
 
-        let backend_buffer = graph.create("backend_buffer", TextureDescriptor { width: 16 });
+        let backend_buffer = graph.create(
+            "backend_buffer",
+            TextureDescriptor {
+                width: 16,
+                ..Default::default()
+            },
+        );
 
         let mut post_pass = graph.create_pass_node_builder("post", 1);
 
@@ -643,7 +679,13 @@ mod test {
 
         post_pass.build();
 
-        let only_write_buffer = graph.create("backend_buffer", TextureDescriptor { width: 17 });
+        let only_write_buffer = graph.create(
+            "backend_buffer",
+            TextureDescriptor {
+                width: 17,
+                ..Default::default()
+            },
+        );
 
         //cull
         let mut only_write_pass = graph.create_pass_node_builder("only_write", 4);

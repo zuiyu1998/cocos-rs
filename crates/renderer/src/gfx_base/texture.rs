@@ -1,13 +1,16 @@
 use std::fmt::Debug;
 
-use super::{AnyFGResource, AnyFGResourceDescriptor, FGResource, FGResourceDescriptor};
+use super::{
+    AnyFGResource, AnyFGResourceDescriptor, FGResource, FGResourceDescriptor, SampleCount,
+    TextFormat, TextureFlags, TextureType, TextureUsage,
+};
 
-pub trait BaseTexture: 'static + Debug {
+pub trait TextureTrait: 'static + Debug {
     fn test(&self);
 }
 
 #[derive(Debug)]
-pub struct Texture(Box<dyn BaseTexture>);
+pub struct Texture(Box<dyn TextureTrait>);
 
 impl PartialEq for Texture {
     fn eq(&self, other: &Self) -> bool {
@@ -18,14 +21,40 @@ impl PartialEq for Texture {
 impl Eq for Texture {}
 
 impl Texture {
-    pub fn new<T: BaseTexture>(base: T) -> Self {
+    pub fn new<T: TextureTrait>(base: T) -> Self {
         Texture(Box::new(base))
     }
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TextureDescriptor {
+    pub texture_type: TextureType,
+    pub texture_usage: TextureUsage,
+    pub texture_format: TextFormat,
     pub width: u32,
+    pub height: u32,
+    pub texture_flags: TextureFlags,
+    pub layer_count: u32,
+    pub level_count: u32,
+    pub sample_count: SampleCount,
+    pub depth: u32,
+}
+
+impl Default for TextureDescriptor {
+    fn default() -> Self {
+        TextureDescriptor {
+            texture_type: Default::default(),
+            texture_usage: TextureUsage::NONE,
+            texture_format: TextFormat::Unknown,
+            width: 0,
+            height: 0,
+            texture_flags: TextureFlags::NONE,
+            layer_count: 1,
+            level_count: 1,
+            sample_count: SampleCount::X1,
+            depth: 1,
+        }
+    }
 }
 
 impl FGResource for Texture {

@@ -85,14 +85,14 @@ impl Allocator {
 pub mod test {
     use super::{Allocator, ResourceCreator};
     use crate::gfx_base::{
-        AllocatorKey, AnyFGResource, AnyFGResourceDescriptor, BaseTexture, Texture,
-        TextureDescriptor,
+        AllocatorKey, AnyFGResource, AnyFGResourceDescriptor, Texture, TextureDescriptor,
+        TextureTrait,
     };
 
     #[derive(Debug)]
     pub struct TestTexture;
 
-    impl BaseTexture for TestTexture {
+    impl TextureTrait for TestTexture {
         fn test(&self) {}
     }
 
