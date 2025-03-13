@@ -1,12 +1,14 @@
 mod allocator;
 mod buffer;
 mod common;
+mod device;
 mod handle;
 mod texture;
 
 pub use allocator::*;
 pub use buffer::*;
 pub use common::*;
+pub use device::*;
 pub use handle::*;
 pub use texture::*;
 

@@ -2,12 +2,14 @@ use super::{
     device_pass::{DevicePass, LogicPass},
     pass::{PassNode, PassNodeInfo},
     pass_node_builder::PassNodeBuilder,
+    resource_data_table::ResourceDataTable,
+    resource_table::ResourceTable,
     virtual_resources::{ResourceEntry, VirtualResource},
 };
 use crate::{
     RendererError,
     gfx_base::{
-        Allocator, FGResource, FGResourceDescriptor, Handle, LoadOp, StoreOp, TypeEquals,
+        Allocator, Device, FGResource, FGResourceDescriptor, Handle, LoadOp, StoreOp, TypeEquals,
         TypedHandle,
     },
 };
@@ -15,7 +17,13 @@ use std::mem::swap;
 
 pub type PassInsertPoint = u16;
 
-pub type DynRenderFn = dyn FnOnce() -> Result<(), RendererError>;
+pub type DynRenderFn =
+    dyn FnOnce(&ResourceTable, &dyn ResourceDataTable) -> Result<(), RendererError>;
+
+pub struct FrameGraphExecutionParams<'a> {
+    pub resource_data_table: &'a dyn ResourceDataTable,
+    pub device: Device,
+}
 
 pub struct FrameGraph {
     virtual_resources: Vec<Box<dyn VirtualResource>>,
@@ -46,13 +54,13 @@ impl FrameGraph {
         }
     }
 
-    pub fn execute(&mut self) {
+    pub fn execute(&mut self, params: &FrameGraphExecutionParams) {
         let mut temp: Vec<DevicePass> = vec![];
 
         swap(&mut temp, &mut self.device_passes);
 
         for mut device_pass in temp.into_iter() {
-            device_pass.execute()
+            device_pass.execute(params)
         }
     }
 
@@ -81,8 +89,6 @@ impl FrameGraph {
     }
 
     pub fn generate_device_passes(&mut self) {
-        //todo Allocator
-
         let mut pass_handle = Handle::new(1);
 
         let mut sub_pass_node_handles: Vec<Handle> = vec![];

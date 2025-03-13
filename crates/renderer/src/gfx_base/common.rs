@@ -15,10 +15,10 @@ pub struct SubpassInfo {
     pub resolves: Vec<u32>,
     pub preserves: Vec<u32>,
 }
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Viewport {}
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Rect {}
 
 #[derive(Debug, Default, Clone)]

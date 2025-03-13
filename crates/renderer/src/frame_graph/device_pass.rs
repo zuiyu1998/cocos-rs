@@ -1,11 +1,12 @@
 use std::{cmp::Ordering, rc::Rc};
 
 use crate::gfx_base::{
-    AnyFGResource, Handle, INVALID_BINDING, PassBarrierPair, Rect, StoreOp, SubpassInfo, Viewport,
+    AnyFGResource, CommandBuffer, Handle, INVALID_BINDING, PassBarrierPair, Rect, StoreOp,
+    SubpassInfo, Viewport,
 };
 
 use super::{
-    DynRenderFn, FrameGraph,
+    DynRenderFn, FrameGraph, FrameGraphExecutionParams,
     render_target_attachment::{
         RenderTargetAttachment, RenderTargetAttachmentInfo, RenderTargetAttachmentUsage,
     },
@@ -19,11 +20,15 @@ pub struct DevicePass {
     subpasses: Vec<Subpass>,
     attachments: Vec<Attachment>,
     resource_table: ResourceTable,
+    viewport: Viewport,
+    scissor: Rect,
+
+    current_viewport: Viewport,
+    current_scissor: Rect,
 }
 
 #[derive(Default)]
 pub struct LogicPass {
-    pub custom_viewport: bool,
     pub viewport: Option<Viewport>,
     pub scissor: Option<Rect>,
     pub render_fn: Option<Box<DynRenderFn>>,
@@ -344,5 +349,62 @@ impl DevicePass {
         }
     }
 
-    pub fn execute(&mut self) {}
+    pub fn execute(&mut self, params: &FrameGraphExecutionParams) {
+        let cmd_buffer = params.device.get_command_buffer_mut();
+
+        self.begin(cmd_buffer);
+
+        let subpass_len = self.subpasses.len();
+
+        for i in 0..subpass_len {
+            let subpass = &mut self.subpasses[i];
+
+            for logic_pass in subpass.logic_passes.iter_mut() {
+                let viewport: Viewport = if logic_pass.viewport.is_some() {
+                    logic_pass.viewport.as_ref().unwrap().clone()
+                } else {
+                    self.viewport.clone()
+                };
+
+                if viewport != self.viewport {
+                    cmd_buffer.set_viewport(&viewport);
+                    self.current_viewport = viewport;
+                }
+
+                let scissor: Rect = if logic_pass.scissor.is_some() {
+                    logic_pass.scissor.as_ref().unwrap().clone()
+                } else {
+                    self.scissor.clone()
+                };
+
+                if scissor != self.scissor {
+                    cmd_buffer.set_scissor(&scissor);
+                    self.current_scissor = scissor;
+                }
+
+                if let Some(render_fn) = logic_pass.render_fn.take() {
+                    if let Err(e) = render_fn(&self.resource_table, params.resource_data_table) {
+                        //todo 添加日志记录
+                        println!("render_fn error: {}", e);
+                    }
+                }
+            }
+
+            //? 判断subpass 长度
+            self.next(cmd_buffer);
+        }
+
+        self.end(cmd_buffer);
+    }
+
+    pub fn next(&mut self, _cmd_buffer: &mut CommandBuffer) {
+        //todo
+    }
+    pub fn begin(&mut self, _cmd_buffer: &mut CommandBuffer) {
+        //todo
+    }
+
+    pub fn end(&mut self, _cmd_buffer: &mut CommandBuffer) {
+        //todo
+    }
 }

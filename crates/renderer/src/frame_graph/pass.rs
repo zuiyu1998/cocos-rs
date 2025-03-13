@@ -51,7 +51,6 @@ pub struct PassNodeInfo {
 impl PassNode {
     pub(crate) fn take(&mut self) -> LogicPass {
         LogicPass {
-            custom_viewport: self.custom_viewport,
             viewport: self.viewport.take(),
             scissor: self.scissor.take(),
             render_fn: self.render_fn.take(),
