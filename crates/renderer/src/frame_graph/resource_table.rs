@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, rc::Rc};
 
 use crate::gfx_base::{AnyFGResource, Handle};
 
@@ -6,14 +6,14 @@ use super::FrameGraph;
 
 #[derive(Default)]
 pub struct ResourceTable {
-    reads: HashMap<Handle, Arc<AnyFGResource>>,
-    writes: HashMap<Handle, Arc<AnyFGResource>>,
+    reads: HashMap<Handle, Rc<AnyFGResource>>,
+    writes: HashMap<Handle, Rc<AnyFGResource>>,
 }
 
 pub fn extra_resource(
     graph: &FrameGraph,
     resource_handles: &[Handle],
-    to: &mut HashMap<Handle, Arc<AnyFGResource>>,
+    to: &mut HashMap<Handle, Rc<AnyFGResource>>,
 ) {
     for resource_handle in resource_handles.iter() {
         let resource_node = graph.get_resource_node(*resource_handle);
@@ -26,6 +26,7 @@ pub fn extra_resource(
         }
     }
 }
+
 impl ResourceTable {
     pub fn extra(&mut self, graph: &FrameGraph, pass_node_handle: Handle) {
         let mut pass_node_handle = pass_node_handle;

@@ -1,4 +1,4 @@
-use std::{mem::swap, sync::Arc};
+use std::{mem::swap, rc::Rc};
 
 use super::pass::PassNode;
 
@@ -42,7 +42,7 @@ pub trait VirtualResource: 'static {
     fn request(&mut self, allocator: &mut Allocator);
     fn release(&mut self, allocator: &mut Allocator);
 
-    fn get_any_resource(&self) -> Option<Arc<AnyFGResource>> {
+    fn get_any_resource(&self) -> Option<Rc<AnyFGResource>> {
         None
     }
 }
@@ -83,7 +83,7 @@ impl<ResourceType> VirtualResource for ResourceEntry<ResourceType>
 where
     ResourceType: FGResource,
 {
-    fn get_any_resource(&self) -> Option<Arc<AnyFGResource>> {
+    fn get_any_resource(&self) -> Option<Rc<AnyFGResource>> {
         match &self.resource {
             ResourceEntryState::Uninitialized(_) => None,
             ResourceEntryState::Initialization { resource, .. } => Some(resource.resource.clone()),

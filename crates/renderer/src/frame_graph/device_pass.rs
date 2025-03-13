@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, sync::Arc};
+use std::{cmp::Ordering, rc::Rc};
 
 use crate::gfx_base::{
     AnyFGResource, Handle, INVALID_BINDING, PassBarrierPair, Rect, StoreOp, SubpassInfo, Viewport,
@@ -31,7 +31,7 @@ pub struct LogicPass {
 
 pub struct Attachment {
     attachment: RenderTargetAttachment,
-    render_target: Arc<AnyFGResource>,
+    render_target: Rc<AnyFGResource>,
 }
 
 #[derive(Default)]

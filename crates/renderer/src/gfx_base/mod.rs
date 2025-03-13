@@ -1,18 +1,21 @@
 mod allocator;
+mod buffer;
 mod common;
 mod handle;
 mod texture;
 
 pub use allocator::*;
+pub use buffer::*;
 pub use common::*;
 pub use handle::*;
 pub use texture::*;
 
-use std::{hash::Hash, sync::Arc};
+use std::{hash::Hash, rc::Rc};
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum AnyFGResource {
     Texture(Texture),
+    Buffer(Buffer),
 }
 
 impl AnyFGResource {
@@ -24,15 +27,16 @@ impl AnyFGResource {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum AnyFGResourceDescriptor {
     Texture(TextureDescriptor),
+    Buffer(BufferDescriptor),
 }
 
 pub struct AnyResource {
     pub desc: AnyFGResourceDescriptor,
-    pub resource: Arc<AnyFGResource>,
+    pub resource: Rc<AnyFGResource>,
 }
 
 impl AnyResource {
-    pub fn new(desc: AnyFGResourceDescriptor, resource: Arc<AnyFGResource>) -> Self {
+    pub fn new(desc: AnyFGResourceDescriptor, resource: Rc<AnyFGResource>) -> Self {
         AnyResource { desc, resource }
     }
 }

@@ -52,13 +52,13 @@ impl<T> Index<Handle> for Vec<T> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct TypedHandle<ResourceType> {
+#[derive(Debug)]
+pub struct TypedHandle<T> {
     index: usize,
-    _marker: PhantomData<ResourceType>,
+    _marker: PhantomData<T>,
 }
 
-impl<ResourceType> TypedHandle<ResourceType> {
+impl<T> TypedHandle<T> {
     pub fn handle(&self) -> Handle {
         Handle::new(self.index)
     }
@@ -71,13 +71,13 @@ impl<ResourceType> TypedHandle<ResourceType> {
     }
 }
 
-impl<ResourceType> TypedHandle<ResourceType> {
+impl<T> TypedHandle<T> {
     pub fn is_valid(&self) -> bool {
         !self.index == INVALID
     }
 }
 
-impl<ResourceType> Clone for TypedHandle<ResourceType> {
+impl<T> Clone for TypedHandle<T> {
     fn clone(&self) -> Self {
         Self {
             index: self.index,
@@ -86,17 +86,25 @@ impl<ResourceType> Clone for TypedHandle<ResourceType> {
     }
 }
 
-impl<ResourceType: Ord> Ord for TypedHandle<ResourceType> {
+impl<T> Ord for TypedHandle<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.index.cmp(&other.index)
     }
 }
 
-impl<ResourceType: PartialEq> PartialOrd for TypedHandle<ResourceType> {
+impl<T> PartialOrd for TypedHandle<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.index.partial_cmp(&other.index)
+        Some(self.index.cmp(&other.index))
     }
 }
+
+impl<T> PartialEq for TypedHandle<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index && self._marker == other._marker
+    }
+}
+
+impl<T> Eq for TypedHandle<T> {}
 
 impl<ResourceType> TypedHandle<ResourceType> {}
 

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, rc::Rc};
 
 use super::{AnyFGResource, AnyFGResourceDescriptor, AnyResource};
 
@@ -27,12 +27,12 @@ pub struct Allocator {
 }
 
 pub struct ResourceState {
-    resource: Arc<AnyFGResource>,
+    resource: Rc<AnyFGResource>,
     count: usize,
 }
 
 impl ResourceState {
-    pub fn new(resource: Arc<AnyFGResource>, count: usize) -> Self {
+    pub fn new(resource: Rc<AnyFGResource>, count: usize) -> Self {
         ResourceState { resource, count }
     }
 }
@@ -56,7 +56,7 @@ impl Allocator {
             return AnyResource::new(desc.clone(), state.resource.clone());
         }
 
-        let resource = Arc::new(self.creator.create(desc.clone()));
+        let resource = Rc::new(self.creator.create(desc.clone()));
 
         let state = ResourceState::new(resource.clone(), 1);
 
@@ -85,16 +85,27 @@ impl Allocator {
 pub mod test {
     use super::{Allocator, ResourceCreator};
     use crate::gfx_base::{
-        AllocatorKey, AnyFGResource, AnyFGResourceDescriptor, Texture, TextureDescriptor,
+        AllocatorKey, AnyFGResource, AnyFGResourceDescriptor, BaseTexture, Texture,
+        TextureDescriptor,
     };
+
+    #[derive(Debug)]
+    pub struct TestTexture;
+
+    impl BaseTexture for TestTexture {
+        fn test(&self) {}
+    }
 
     pub struct TestResourceCreator {}
 
     impl ResourceCreator for TestResourceCreator {
         fn create(&self, desc: AnyFGResourceDescriptor) -> AnyFGResource {
             match desc {
-                AnyFGResourceDescriptor::Texture(desc) => {
-                    AnyFGResource::Texture(Texture::new(desc))
+                AnyFGResourceDescriptor::Texture(_desc) => {
+                    AnyFGResource::Texture(Texture::new(TestTexture))
+                }
+                _ => {
+                    unimplemented!()
                 }
             }
         }

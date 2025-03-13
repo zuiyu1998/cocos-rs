@@ -1,13 +1,25 @@
+use std::fmt::Debug;
+
 use super::{AnyFGResource, AnyFGResourceDescriptor, FGResource, FGResourceDescriptor};
 
-#[derive(Debug, PartialEq, PartialOrd, Eq, Ord, Default)]
-pub struct Texture {
-    desc: TextureDescriptor,
+pub trait BaseTexture: 'static + Debug {
+    fn test(&self);
 }
 
+#[derive(Debug)]
+pub struct Texture(Box<dyn BaseTexture>);
+
+impl PartialEq for Texture {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(&*self.0, &*other.0)
+    }
+}
+
+impl Eq for Texture {}
+
 impl Texture {
-    pub fn new(desc: TextureDescriptor) -> Self {
-        Texture { desc }
+    pub fn new<T: BaseTexture>(base: T) -> Self {
+        Texture(Box::new(base))
     }
 }
 
@@ -22,6 +34,9 @@ impl FGResource for Texture {
     fn borrow_resource(res: &AnyFGResource) -> &Self {
         match res {
             AnyFGResource::Texture(texture) => texture,
+            _ => {
+                unimplemented!()
+            }
         }
     }
 }
