@@ -3,6 +3,7 @@ mod buffer;
 mod common;
 mod device;
 mod handle;
+mod render_pass;
 mod texture;
 
 pub use allocator::*;

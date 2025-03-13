@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
 use super::{
-    AnyFGResource, AnyFGResourceDescriptor, FGResource, FGResourceDescriptor, SampleCount,
-    TextFormat, TextureFlags, TextureType, TextureUsage,
+    AnyFGResource, AnyFGResourceDescriptor, FGResource, FGResourceDescriptor, Format, SampleCount,
+    TextureFlags, TextureType, TextureUsage,
 };
 
 pub trait TextureTrait: 'static + Debug {
@@ -30,7 +30,7 @@ impl Texture {
 pub struct TextureDescriptor {
     pub texture_type: TextureType,
     pub texture_usage: TextureUsage,
-    pub texture_format: TextFormat,
+    pub format: Format,
     pub width: u32,
     pub height: u32,
     pub texture_flags: TextureFlags,
@@ -45,7 +45,7 @@ impl Default for TextureDescriptor {
         TextureDescriptor {
             texture_type: Default::default(),
             texture_usage: TextureUsage::NONE,
-            texture_format: TextFormat::Unknown,
+            format: Format::Unknown,
             width: 0,
             height: 0,
             texture_flags: TextureFlags::NONE,

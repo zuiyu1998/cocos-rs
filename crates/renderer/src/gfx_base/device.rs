@@ -1,6 +1,7 @@
 use super::{
     AnyFGResource, AnyFGResourceDescriptor, Buffer, BufferDescriptor, Rect, ResourceCreator,
     Texture, TextureDescriptor, Viewport,
+    render_pass::{RenderPass, RenderPassDescriptor},
 };
 
 pub trait DeviceTrait: 'static {
@@ -9,6 +10,8 @@ pub trait DeviceTrait: 'static {
     fn create_texture(&self, desc: TextureDescriptor) -> Texture;
 
     fn create_buffer(&self, desc: BufferDescriptor) -> Buffer;
+
+    fn create_render_pass(&self, desc: RenderPassDescriptor) -> RenderPass;
 }
 
 impl ResourceCreator for Device {
@@ -33,6 +36,10 @@ impl DeviceTrait for Device {
 
     fn create_buffer(&self, desc: BufferDescriptor) -> Buffer {
         self.0.create_buffer(desc)
+    }
+
+    fn create_render_pass(&self, desc: RenderPassDescriptor) -> RenderPass {
+        self.0.create_render_pass(desc)
     }
 }
 

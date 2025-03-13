@@ -2,8 +2,66 @@ use bitflags::bitflags;
 
 pub const INVALID_BINDING: u32 = 0;
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct SubpassDependency {
+    pub src_subpass: u32,
+    pub dst_subpass: u32,
+    pub barrier: Option<GeneralBarrier>,
+    pub prev_accesses: AccessFlags,
+    pub next_accesses: AccessFlags,
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum TextFormat {
+pub struct GeneralBarrier {}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DepthStencilAttachment {
+    pub format: Format,
+    pub sample_count: SampleCount,
+    pub depth_load_op: LoadOp,
+    pub depth_store_op: StoreOp,
+    pub stencil_load_op: LoadOp,
+    pub stencil_store_op: StoreOp,
+    pub barrier: Option<GeneralBarrier>,
+}
+
+impl Default for DepthStencilAttachment {
+    fn default() -> Self {
+        DepthStencilAttachment {
+            format: Format::Unknown,
+            sample_count: SampleCount::X1,
+            depth_load_op: LoadOp::Clear,
+            depth_store_op: StoreOp::Store,
+            stencil_load_op: LoadOp::Clear,
+            stencil_store_op: StoreOp::Store,
+            barrier: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ColorAttachment {
+    pub format: Format,
+    pub sample_count: SampleCount,
+    pub load_op: LoadOp,
+    pub store_op: StoreOp,
+    pub barrier: Option<GeneralBarrier>,
+}
+
+impl Default for ColorAttachment {
+    fn default() -> Self {
+        ColorAttachment {
+            format: Format::Unknown,
+            sample_count: SampleCount::X1,
+            load_op: LoadOp::Clear,
+            store_op: StoreOp::Store,
+            barrier: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Format {
     Unknown,
 }
 
@@ -47,17 +105,24 @@ pub enum TextureType {
     Tex2dArray,
 }
 
-#[derive(Debug, PartialEq, Eq, Default, PartialOrd, Clone, Copy)]
-pub enum AccessFlags {
-    #[default]
-    None,
+bitflags! {
+    #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Copy)]
+    pub struct AccessFlags: u32 {
+        const NONE = 0;
+
+    }
 }
 
-#[derive(Debug, Default)]
+impl Default for AccessFlags {
+    fn default() -> Self {
+        AccessFlags::NONE
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Default, PartialOrd, Clone, Hash, Ord)]
 pub struct SubpassInfo {
     pub colors: Vec<u32>,
     pub depth_stencil: u32,
-
     pub inputs: Vec<u32>,
     pub resolves: Vec<u32>,
     pub preserves: Vec<u32>,
@@ -71,17 +136,17 @@ pub struct Rect {}
 #[derive(Debug, Default, Clone)]
 pub struct PassBarrierPair {}
 
-#[derive(Debug, PartialEq, Eq, Default, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Default, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum LoadOp {
     // Load the previous content from memory
     #[default]
     Load,
-    // // Clear the content to a fixed value
-    // Clear,
+    // Clear the content to a fixed value
+    Clear,
     // Discard,
 }
 
-#[derive(Debug, PartialEq, Eq, Default, PartialOrd, Ord, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Default, PartialOrd, Ord, Clone, Copy, Hash)]
 pub enum StoreOp {
     #[default]
     Store, // Store the pending content to memory
