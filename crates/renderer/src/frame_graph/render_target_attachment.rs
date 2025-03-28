@@ -1,6 +1,4 @@
-use crate::gfx_base::LoadOp;
-
-use super::{Texture, TypedHandle};
+use crate::gfx_base::{AccessFlags, Handle, LoadOp, StoreOp, Texture, TypedHandle};
 
 #[derive(Debug, Eq, PartialEq, Default)]
 pub struct RenderTargetAttachment {
@@ -9,9 +7,36 @@ pub struct RenderTargetAttachment {
     pub level: u8,
     pub layer: u8,
     pub index: u8,
+    pub store_op: StoreOp,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
+impl RenderTargetAttachment {
+    pub const DEPTH_STENCIL_SLOT_START: u8 = 13;
+
+    pub fn to_info(&self) -> RenderTargetAttachmentInfo {
+        RenderTargetAttachmentInfo {
+            texture_handle: self.texture_handle.handle(),
+            store_op: self.store_op,
+            write_mask: self.desc.write_mask,
+            load_op: self.desc.load_op,
+            usage: self.desc.usage,
+            slot: self.desc.slot,
+            end_accesses: self.desc.end_accesses,
+        }
+    }
+}
+
+pub struct RenderTargetAttachmentInfo {
+    pub texture_handle: Handle,
+    pub store_op: StoreOp,
+    pub write_mask: u8,
+    pub load_op: LoadOp,
+    pub usage: RenderTargetAttachmentUsage,
+    pub slot: u8,
+    pub end_accesses: AccessFlags,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Default, Clone, Copy)]
 pub enum RenderTargetAttachmentUsage {
     #[default]
     Color = 0,
@@ -26,6 +51,7 @@ pub struct RenderTargetAttachmentDescriptor {
     pub slot: u8,
     pub write_mask: u8,
     pub load_op: LoadOp,
+    pub end_accesses: AccessFlags,
 }
 
 impl Ord for RenderTargetAttachment {
