@@ -1,8 +1,6 @@
 pub mod deferred;
 
-use cocos_renderer::FrameGraph;
-
-use crate::scene::Camera;
+use crate::{Camera, FrameGraph};
 
 pub trait RenderPipeline {
     fn render(&mut self, cameras: &[Camera]);

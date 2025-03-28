@@ -1,7 +1,8 @@
 mod main_flow;
 
+use crate::{Camera, Device, FrameGraph, TransientResourceCache};
+
 use super::{FrameGraphContext, RenderFlow, RenderPipeline};
-use cocos_renderer::{Device, FrameGraph, TransientResourceCache};
 use main_flow::MainFlow;
 use std::sync::Arc;
 
@@ -26,7 +27,7 @@ impl DeferredRenderPipeline {
 }
 
 impl RenderPipeline for DeferredRenderPipeline {
-    fn render(&mut self, cameras: &[crate::scene::Camera]) {
+    fn render(&mut self, cameras: &[Camera]) {
         for camera in cameras.iter() {
             let mut context = FrameGraphContext {
                 camera,
