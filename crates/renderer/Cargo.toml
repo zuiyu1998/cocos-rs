@@ -7,3 +7,4 @@ edition = "2024"
 thiserror = { workspace = true }
 bitflags = { version = "2.9" }
 downcast-rs = { workspace = true }
+auto_impl = { workspace = true }

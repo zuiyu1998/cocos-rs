@@ -1,7 +1,8 @@
 [workspace]
-members = ["crates/renderer"]
+members = [ "crates/cocos","crates/renderer"]
 resolver = "3"
 
 [workspace.dependencies]
 thiserror = { version = "1.0" }
 downcast-rs = "2.0.1"
+auto_impl = "1.2"

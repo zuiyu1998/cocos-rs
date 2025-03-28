@@ -6,6 +6,7 @@ use super::{
     TypeEquals, VirtualResource, resource_table::ResourceTable,
 };
 
+#[derive(Default)]
 pub struct FrameGraph {
     pass_nodes: Vec<PassNode>,
     resource_nodes: Vec<ResourceNode>,
@@ -15,6 +16,10 @@ pub struct FrameGraph {
 }
 
 impl FrameGraph {
+    pub fn reset(&mut self) {
+        *self = FrameGraph::default();
+    }
+
     pub fn execute(
         &mut self,
         creator: &impl ResourceCreator,
@@ -31,7 +36,7 @@ impl FrameGraph {
     }
 
     pub fn compile(
-        mut self,
+        &mut self,
         creator: &impl ResourceCreator,
         transient_resource_cache: &mut TransientResourceCache,
     ) {
