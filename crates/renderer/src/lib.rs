@@ -1,9 +1,8 @@
-#[allow(dead_code)]
 mod frame_graph;
-#[allow(dead_code)]
+
 mod gfx_base;
 
-use thiserror::Error;
+pub use frame_graph::*;
+pub use gfx_base::*;
 
-#[derive(Debug, Error)]
 pub enum RendererError {}

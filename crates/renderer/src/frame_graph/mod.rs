@@ -1,11 +1,20 @@
-pub mod black_board;
+pub mod callback_pass;
 pub mod device_pass;
 pub mod graph;
 pub mod pass;
+pub mod pass_node;
 pub mod pass_node_builder;
-pub mod render_target_attachment;
-pub mod resource_data_table;
+pub mod resource;
+pub mod resource_node;
 pub mod resource_table;
-pub mod virtual_resources;
+pub mod transient_resource_cache;
 
+pub use callback_pass::*;
+pub use device_pass::*;
 pub use graph::*;
+pub use pass::*;
+pub use pass_node::*;
+pub use pass_node_builder::*;
+pub use resource::*;
+pub use resource_node::*;
+pub use transient_resource_cache::*;

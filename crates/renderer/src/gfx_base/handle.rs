@@ -1,118 +1,58 @@
-use std::{
-    marker::PhantomData,
-    ops::{Add, Index, IndexMut},
-};
+use std::{any::TypeId, hash::Hash, marker::PhantomData};
 
-const INVALID: usize = usize::MAX;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Handle(usize);
-
-impl Handle {
-    pub fn index(&self) -> usize {
-        self.0
-    }
-}
-
-impl Default for Handle {
-    fn default() -> Self {
-        Handle(INVALID)
-    }
-}
-
-impl Add<usize> for Handle {
-    type Output = Handle;
-
-    fn add(self, rhs: usize) -> Self::Output {
-        Handle(self.0 + rhs)
-    }
-}
-
-impl Handle {
-    pub fn new(v: usize) -> Handle {
-        Handle(v)
-    }
-
-    pub fn is_valid(&self) -> bool {
-        !self.0 == INVALID
-    }
-}
-
-impl<T> IndexMut<Handle> for Vec<T> {
-    fn index_mut(&mut self, handle: Handle) -> &mut Self::Output {
-        &mut self[handle.0]
-    }
-}
-
-impl<T> Index<Handle> for Vec<T> {
-    type Output = T;
-
-    fn index(&self, handle: Handle) -> &Self::Output {
-        &self[handle.0]
-    }
-}
-
-#[derive(Debug)]
-pub struct TypedHandle<T> {
+//类型索引
+pub struct TypeHandle<T> {
     index: usize,
     _marker: PhantomData<T>,
 }
 
-impl<T> TypedHandle<T> {
-    pub fn handle(&self) -> Handle {
-        Handle::new(self.index)
-    }
-
-    pub fn new(handle: Handle) -> Self {
-        TypedHandle {
-            index: handle.0,
+impl<T> Default for TypeHandle<T> {
+    fn default() -> Self {
+        TypeHandle {
+            index: Self::UNINITIALIZED,
             _marker: PhantomData,
         }
     }
 }
 
-impl<T> TypedHandle<T> {
+impl<T> TypeHandle<T> {
+    const UNINITIALIZED: usize = usize::MAX;
+
     pub fn is_valid(&self) -> bool {
-        !self.index == INVALID
+        self.index != Self::UNINITIALIZED
     }
-}
 
-impl<T> Clone for TypedHandle<T> {
-    fn clone(&self) -> Self {
-        Self {
-            index: self.index,
-            _marker: self._marker,
+    pub fn new(index: usize) -> Self {
+        TypeHandle {
+            index,
+            _marker: PhantomData,
         }
     }
-}
 
-impl<T> Ord for TypedHandle<T> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.index.cmp(&other.index)
+    pub fn index(&self) -> usize {
+        self.index
     }
 }
 
-impl<T> PartialOrd for TypedHandle<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.index.cmp(&other.index))
-    }
-}
-
-impl<T> PartialEq for TypedHandle<T> {
+impl<T> PartialEq for TypeHandle<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.index == other.index && self._marker == other._marker
+        self.index == other.index
     }
 }
 
-impl<T> Eq for TypedHandle<T> {}
+impl<T: 'static> Hash for TypeHandle<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.index.hash(state);
+        TypeId::of::<T>().hash(state);
+    }
+}
 
-impl<ResourceType> TypedHandle<ResourceType> {}
+impl<T> Copy for TypeHandle<T> {}
 
-impl<ResourceType> Default for TypedHandle<ResourceType> {
-    fn default() -> Self {
-        Self {
-            index: INVALID,
-            _marker: Default::default(),
-        }
+impl<T> Eq for TypeHandle<T> {}
+
+impl<T> Clone for TypeHandle<T> {
+    fn clone(&self) -> Self {
+        *self
     }
 }

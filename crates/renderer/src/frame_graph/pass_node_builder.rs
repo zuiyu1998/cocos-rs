@@ -1,50 +1,60 @@
-use super::{FrameGraph, pass::PassNode};
-use crate::gfx_base::{FGResource, FGResourceDescriptor, Handle, TypeEquals, TypedHandle};
+use crate::gfx_base::TypeHandle;
+
+use super::{
+    FGResource, FGResourceDescriptor, FrameGraph, GpuRead, GpuWrite, PassNode, ResourceNodeHandle,
+    ResourceRef, TypeEquals,
+};
 
 pub struct PassNodeBuilder<'a> {
-    pass_node: PassNode,
     graph: &'a mut FrameGraph,
+    pass_node: Option<PassNode>,
 }
 
 impl<'a> PassNodeBuilder<'a> {
-    pub fn new(pass_node: PassNode, graph: &'a mut FrameGraph) -> Self {
-        Self { pass_node, graph }
+    pub fn build(mut self) -> PassNode {
+        self.pass_node.take().unwrap()
     }
 
-    pub fn set_side_effect(&mut self, side_effect: bool) {
-        self.pass_node.side_effect = side_effect
+    pub fn new(
+        insert_point: usize,
+        name: &str,
+        handle: TypeHandle<PassNode>,
+        graph: &'a mut FrameGraph,
+    ) -> Self {
+        Self {
+            graph,
+            pass_node: Some(PassNode::new(insert_point, name, handle)),
+        }
     }
 
     pub fn create<DescriptorType>(
         &mut self,
         name: &str,
         desc: DescriptorType,
-    ) -> TypedHandle<DescriptorType::Resource>
+    ) -> ResourceNodeHandle<DescriptorType::Resource>
     where
     DescriptorType: FGResourceDescriptor + TypeEquals<Other = <<DescriptorType as FGResourceDescriptor>::Resource as FGResource>::Descriptor>,
     {
         self.graph.create(name, desc)
     }
 
-    pub fn build(self) -> Handle {
-        let handle = self.pass_node.handle;
-        self.graph.create_pass_node(self.pass_node);
-        handle
+    pub fn read<ResourceType>(
+        &mut self,
+        resource_node_handle: ResourceNodeHandle<ResourceType>,
+    ) -> ResourceRef<ResourceType, GpuRead> {
+        self.pass_node
+            .as_mut()
+            .unwrap()
+            .read(self.graph, resource_node_handle)
     }
 
-    pub fn read<Resource: FGResource>(
+    pub fn write<ResourceType>(
         &mut self,
-        input_handle: TypedHandle<Resource>,
-    ) -> TypedHandle<Resource> {
-        self.pass_node.read(input_handle.handle());
-        input_handle
-    }
-
-    pub fn write<Resource: FGResource>(
-        &mut self,
-        out_handle: TypedHandle<Resource>,
-    ) -> TypedHandle<Resource> {
-        let out_handle_index = self.pass_node.write(self.graph, out_handle.handle());
-        TypedHandle::new(out_handle_index)
+        resource_node_handle: ResourceNodeHandle<ResourceType>,
+    ) -> ResourceRef<ResourceType, GpuWrite> {
+        self.pass_node
+            .as_mut()
+            .unwrap()
+            .write(self.graph, resource_node_handle)
     }
 }

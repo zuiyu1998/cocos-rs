@@ -1,55 +1,50 @@
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
-use crate::gfx_base::{AnyFGResource, Handle};
+use crate::TypeHandle;
 
-use super::FrameGraph;
+use super::{
+    AnyFGResource, AnyFGResourceDescriptor, ImportedVirtualResource, ResourceCreator,
+    TransientResourceCache, VirtualResource, VirtualResourceState,
+};
 
 #[derive(Default)]
 pub struct ResourceTable {
-    reads: HashMap<Handle, Rc<AnyFGResource>>,
-    writes: HashMap<Handle, Rc<AnyFGResource>>,
-}
-
-pub fn extra_resource(
-    graph: &FrameGraph,
-    resource_handles: &[Handle],
-    to: &mut HashMap<Handle, Rc<AnyFGResource>>,
-) {
-    for resource_handle in resource_handles.iter() {
-        let resource_node = graph.get_resource_node(*resource_handle);
-
-        if let Some(resource) = graph
-            .get_resource(resource_node.virtual_resource_handle)
-            .get_any_resource()
-        {
-            to.insert(*resource_handle, resource);
-        }
-    }
+    resources: HashMap<TypeHandle<VirtualResource>, AnyFGResource>,
 }
 
 impl ResourceTable {
-    pub fn extra(&mut self, graph: &FrameGraph, pass_node_handle: Handle) {
-        let mut pass_node_handle = pass_node_handle;
+    pub fn request_resources(
+        &mut self,
+        resource: &VirtualResource,
+        creator: &impl ResourceCreator,
+        transient_resource_cache: &mut TransientResourceCache,
+    ) {
+        let handle = resource.info.handle;
 
-        loop {
-            let reads = graph.get_pass_node(pass_node_handle).reads.clone();
-            extra_resource(graph, &reads, &mut self.reads);
+        let resource = match &resource.state {
+            VirtualResourceState::Imported(state) => match &state.resource {
+                ImportedVirtualResource::Texture(resource) => {
+                    AnyFGResource::ImportedTexture(resource.clone())
+                }
+            },
+            VirtualResourceState::Setup(desc) => match desc {
+                AnyFGResourceDescriptor::Texture(texture_desc) => transient_resource_cache
+                    .get_image(texture_desc)
+                    .map(AnyFGResource::OwnedTexture)
+                    .unwrap_or_else(|| creator.create(desc)),
+            },
+        };
 
-            let writes = graph.get_pass_node(pass_node_handle).writes.clone();
-            extra_resource(graph, &writes, &mut self.writes);
+        self.resources.insert(handle, resource);
+    }
 
-            let next = graph
-                .get_pass_node(pass_node_handle)
-                .next_pass_node_handle
-                .is_some();
-
-            if !next {
-                break;
-            } else {
-                pass_node_handle = graph
-                    .get_pass_node(pass_node_handle)
-                    .next_pass_node_handle
-                    .unwrap();
+    pub fn release_resources(self, transient_resource_cache: &mut TransientResourceCache) {
+        for resource in self.resources.into_values() {
+            match resource {
+                AnyFGResource::ImportedTexture(_) => {}
+                AnyFGResource::OwnedTexture(texture) => {
+                    transient_resource_cache.insert_image(texture.get_desc().clone(), texture);
+                }
             }
         }
     }
