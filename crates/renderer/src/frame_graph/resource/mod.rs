@@ -7,7 +7,7 @@ use std::{fmt::Debug, hash::Hash, sync::Arc};
 use super::PassNode;
 
 #[auto_impl(Arc)]
-pub trait ResourceCreator: Clone {
+pub trait ResourceCreator {
     fn create(&self, desc: &AnyFGResourceDescriptor) -> AnyFGResource;
     fn get_command_buffer(&self) -> CommandBuffer;
 }

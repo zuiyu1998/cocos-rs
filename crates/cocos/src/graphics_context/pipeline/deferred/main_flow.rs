@@ -1,4 +1,4 @@
-use crate::{FrameGraphContext, RenderFlow};
+use crate::pipeline::{FrameGraphContext, RenderFlow};
 
 pub struct MainFlow {
     name: String,

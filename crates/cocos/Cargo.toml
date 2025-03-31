@@ -4,4 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-cocos-renderer = { path = "../renderer"}
+cocos-renderer = { path = "../renderer" }
+cocos-core = { path = "../core" }
+winit = { workspace = true }
+wgpu = { workspace = true }
+futures-lite = { workspace = true }

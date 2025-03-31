@@ -1,8 +1,13 @@
 [workspace]
-members = [ "crates/cocos","crates/renderer"]
+members = ["crates/cocos", "crates/core", "crates/renderer"]
 resolver = "3"
 
 [workspace.dependencies]
 thiserror = { version = "1.0" }
 downcast-rs = "2.0.1"
 auto_impl = "1.2"
+
+winit = { version = "0.30" }
+tracing = { version = "0.1", features = ["log"] }
+futures-lite = { version = "2.6" }
+wgpu = { version = "24"}

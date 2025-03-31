@@ -1,8 +1,9 @@
 mod main_flow;
 
-use crate::{Camera, Device, FrameGraph, TransientResourceCache};
+use crate::Camera;
 
 use super::{FrameGraphContext, RenderFlow, RenderPipeline};
+use cocos_renderer::{Device, FrameGraph, TransientResourceCache};
 use main_flow::MainFlow;
 use std::sync::Arc;
 
@@ -46,5 +47,13 @@ impl RenderPipeline for DeferredRenderPipeline {
 
             self.fg.reset();
         }
+    }
+
+    fn activate(&mut self) {
+        todo!()
+    }
+
+    fn on_global_pipeline_state_changed(&mut self) {
+        todo!()
     }
 }
