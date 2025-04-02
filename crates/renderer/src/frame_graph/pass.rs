@@ -1,9 +1,9 @@
-use super::{PassNodeBuilder, resource_table::ResourceTable};
+use super::{PassNodeBuilder, render_context::RenderContext};
 
 pub trait Pass {
     fn setup(&mut self, builder: &mut PassNodeBuilder);
 
-    fn execute(&mut self, resouce_table: &mut ResourceTable);
+    fn execute(&mut self, render_context: &mut RenderContext);
 }
 
 pub type DynPass = Box<dyn Pass>;

@@ -1,30 +1,19 @@
 mod texture;
 
-use crate::{CommandBuffer, Device, Texture, TextureDescriptor, gfx_base::TypeHandle};
-use auto_impl::auto_impl;
+use crate::{Device, Texture, TextureDescriptor, gfx_base::TypeHandle};
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 use super::PassNode;
 
-#[auto_impl(Arc)]
-pub trait ResourceCreator {
-    fn create(&self, desc: &AnyFGResourceDescriptor) -> AnyFGResource;
-    fn get_command_buffer(&self) -> CommandBuffer;
-}
-
-impl ResourceCreator for Device {
-    fn create(&self, _desc: &AnyFGResourceDescriptor) -> AnyFGResource {
-        todo!()
-    }
-
-    fn get_command_buffer(&self) -> CommandBuffer {
-        todo!()
-    }
-}
-
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum AnyFGResourceDescriptor {
     Texture(TextureDescriptor),
+}
+
+impl Device {
+    pub fn create(&self, _desc: &AnyFGResourceDescriptor) -> AnyFGResource {
+        todo!()
+    }
 }
 
 #[derive(Debug)]

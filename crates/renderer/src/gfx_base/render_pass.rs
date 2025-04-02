@@ -1,24 +1,55 @@
-use super::{ColorAttachment, DepthStencilAttachment, SubpassDependency, SubpassInfo};
 use std::fmt::Debug;
 
-pub trait RenderPassTrait: 'static + Debug {}
+use downcast_rs::{Downcast, impl_downcast};
 
-#[derive(Debug)]
-pub struct RenderPass(Box<dyn RenderPassTrait>);
+pub trait RenderPassTrait: 'static + Sync + Send + Debug + Clone {
+    fn new(info: RenderPassInfo) -> Self;
+}
 
-impl PartialEq for RenderPass {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(&*self.0, &*other.0)
+pub trait ErasedRenderPassTrait: 'static + Sync + Send + Debug + Downcast {
+    fn clone_value(&self) -> Box<dyn ErasedRenderPassTrait>;
+}
+
+impl<T> ErasedRenderPassTrait for T
+where
+    T: RenderPassTrait,
+{
+    fn clone_value(&self) -> Box<dyn ErasedRenderPassTrait> {
+        Box::new(self.clone())
     }
 }
 
-impl Eq for RenderPass {}
+impl_downcast!(ErasedRenderPassTrait);
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
-pub struct RenderPassDescriptor {
-    pub color_attachments: Vec<ColorAttachment>,
-    pub depth_stencil_attachment: DepthStencilAttachment,
-    pub depth_stencil_resolve_attachment: DepthStencilAttachment,
-    pub subpasses: Vec<SubpassInfo>,
-    pub dependencies: Vec<SubpassDependency>,
+pub struct RenderPassInfo {}
+
+impl RenderPassInfo {
+    pub fn new() -> Self {
+        RenderPassInfo {}
+    }
+}
+
+#[derive(Debug)]
+pub struct RenderPass {
+    value: Box<dyn ErasedRenderPassTrait>,
+}
+
+impl Clone for RenderPass {
+    fn clone(&self) -> Self {
+        RenderPass {
+            value: self.value.clone_value(),
+        }
+    }
+}
+
+impl RenderPass {
+    pub fn from_info<T: RenderPassTrait>(info: RenderPassInfo) -> Self {
+        RenderPass::new(T::new(info))
+    }
+
+    pub fn new<T: RenderPassTrait>(value: T) -> Self {
+        Self {
+            value: Box::new(value),
+        }
+    }
 }

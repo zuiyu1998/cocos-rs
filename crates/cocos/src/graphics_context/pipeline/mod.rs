@@ -5,10 +5,6 @@ use cocos_renderer::FrameGraph;
 use crate::Camera;
 
 pub trait RenderPipeline {
-    fn activate(&mut self);
-
-    fn on_global_pipeline_state_changed(&mut self);
-
     fn render(&mut self, cameras: &[Camera]);
 }
 

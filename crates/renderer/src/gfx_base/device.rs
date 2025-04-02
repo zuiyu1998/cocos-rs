@@ -1,20 +1,32 @@
+use crate::{define_atomic_id, define_gfx_type};
 use std::fmt::Debug;
 
-pub trait DeviceTrait: 'static + Sync + Send + Debug {}
+use downcast_rs::Downcast;
 
-pub trait ErasedDeviceTrait: 'static + Sync + Send + Debug {}
+use super::command_buffer::CommandBuffer;
 
-impl<T> ErasedDeviceTrait for T where T: DeviceTrait {}
+define_atomic_id!(DeviceId);
 
-#[derive(Debug)]
-pub struct Device {
-    _value: Box<dyn ErasedDeviceTrait>,
+pub trait DeviceTrait: 'static + Sync + Send + Debug {
+    fn create_command_buffer(&self) -> CommandBuffer;
+
+    fn submit(&self, command_buffers: Vec<CommandBuffer>);
 }
 
+pub trait ErasedDeviceTrait: 'static + Sync + Send + Debug + Downcast {
+    fn create_command_buffer(&self) -> CommandBuffer;
+}
+
+impl<T: DeviceTrait> ErasedDeviceTrait for T {
+    fn create_command_buffer(&self) -> CommandBuffer {
+        <T as DeviceTrait>::create_command_buffer(&self)
+    }
+}
+
+define_gfx_type!(Device, DeviceId, DeviceTrait, ErasedDeviceTrait);
+
 impl Device {
-    pub fn new<T: DeviceTrait>(value: T) -> Self {
-        Device {
-            _value: Box::new(value),
-        }
+    pub fn create_command_buffer(&self) -> CommandBuffer {
+        self.value.create_command_buffer()
     }
 }

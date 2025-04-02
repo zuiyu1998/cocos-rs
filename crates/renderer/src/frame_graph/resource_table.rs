@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::TypeHandle;
+use crate::{Device, TypeHandle};
 
 use super::{
-    AnyFGResource, AnyFGResourceDescriptor, ImportedVirtualResource, ResourceCreator,
-    TransientResourceCache, VirtualResource, VirtualResourceState,
+    AnyFGResource, AnyFGResourceDescriptor, ImportedVirtualResource, TransientResourceCache,
+    VirtualResource, VirtualResourceState,
 };
 
 #[derive(Default)]
@@ -16,7 +16,7 @@ impl ResourceTable {
     pub fn request_resources(
         &mut self,
         resource: &VirtualResource,
-        creator: &impl ResourceCreator,
+        device: &Device,
         transient_resource_cache: &mut TransientResourceCache,
     ) {
         let handle = resource.info.handle;
@@ -31,15 +31,19 @@ impl ResourceTable {
                 AnyFGResourceDescriptor::Texture(texture_desc) => transient_resource_cache
                     .get_image(texture_desc)
                     .map(AnyFGResource::OwnedTexture)
-                    .unwrap_or_else(|| creator.create(desc)),
+                    .unwrap_or_else(|| device.create(desc)),
             },
         };
 
         self.resources.insert(handle, resource);
     }
 
-    pub fn release_resources(self, transient_resource_cache: &mut TransientResourceCache) {
-        for resource in self.resources.into_values() {
+    pub fn release_resource(
+        &mut self,
+        handle: &TypeHandle<VirtualResource>,
+        transient_resource_cache: &mut TransientResourceCache,
+    ) {
+        if let Some(resource) = self.resources.remove(handle) {
             match resource {
                 AnyFGResource::ImportedTexture(_) => {}
                 AnyFGResource::OwnedTexture(texture) => {

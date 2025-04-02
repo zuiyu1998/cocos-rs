@@ -1,7 +1,7 @@
-use super::{Pass, PassNodeBuilder, resource_table::ResourceTable};
+use super::{Pass, PassNodeBuilder, render_context::RenderContext};
 
 pub type SetupFn<Data> = Box<dyn FnOnce(&mut PassNodeBuilder, &mut Data)>;
-pub type ExecuteFn<Data> = Box<dyn FnOnce(&Data, &mut ResourceTable)>;
+pub type ExecuteFn<Data> = Box<dyn FnOnce(&Data, &mut RenderContext)>;
 
 pub struct CallbackPass<Data> {
     data: Data,
@@ -15,7 +15,7 @@ where
 {
     pub fn new(
         setup: impl FnOnce(&mut PassNodeBuilder, &mut Data) + 'static,
-        execute: impl FnOnce(&Data, &mut ResourceTable) + 'static,
+        execute: impl FnOnce(&Data, &mut RenderContext) + 'static,
     ) -> Self {
         CallbackPass {
             data: Data::default(),
@@ -35,9 +35,9 @@ where
         }
     }
 
-    fn execute(&mut self, resouce_table: &mut ResourceTable) {
+    fn execute(&mut self, render_context: &mut RenderContext) {
         if let Some(execute) = self.execute.take() {
-            execute(&self.data, resouce_table);
+            execute(&self.data, render_context);
         }
     }
 }

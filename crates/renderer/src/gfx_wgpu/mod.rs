@@ -1,8 +1,3 @@
-use crate::DeviceTrait;
+pub mod device;
 
-#[derive(Debug)]
-pub struct WgpuDevice {
-    pub device: wgpu::Device,
-}
-
-impl DeviceTrait for WgpuDevice {}
+pub use device::*;

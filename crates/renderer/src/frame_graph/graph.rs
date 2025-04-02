@@ -1,9 +1,9 @@
-use crate::gfx_base::TypeHandle;
+use crate::{Device, gfx_base::TypeHandle};
 
 use super::{
     CallbackPass, DevicePass, DynPass, FGResource, FGResourceDescriptor, PassNode, PassNodeBuilder,
-    ResourceCreator, ResourceInfo, ResourceNode, ResourceNodeHandle, TransientResourceCache,
-    TypeEquals, VirtualResource, resource_table::ResourceTable,
+    RenderContext, ResourceInfo, ResourceNode, ResourceNodeHandle, ResourceTable,
+    TransientResourceCache, TypeEquals, VirtualResource,
 };
 
 #[derive(Default)]
@@ -12,7 +12,6 @@ pub struct FrameGraph {
     resource_nodes: Vec<ResourceNode>,
     resources: Vec<VirtualResource>,
     device_passes: Option<Vec<DevicePass>>,
-    resource_table: Option<ResourceTable>,
 }
 
 impl FrameGraph {
@@ -22,22 +21,21 @@ impl FrameGraph {
 
     pub fn execute(
         &mut self,
-        creator: &impl ResourceCreator,
+        device: &Device,
         transient_resource_cache: &mut TransientResourceCache,
     ) {
-        let mut resource_table = self.resource_table.take().unwrap();
+        let mut render_context = RenderContext::new(device, transient_resource_cache);
+
         let device_passes = self.device_passes.take().unwrap();
 
         for mut device_pass in device_passes {
-            device_pass.execute(creator, &mut resource_table);
+            device_pass.execute(&mut render_context);
         }
-
-        resource_table.release_resources(transient_resource_cache);
     }
 
     pub fn compile(
         &mut self,
-        creator: &impl ResourceCreator,
+        device: &Device,
         transient_resource_cache: &mut TransientResourceCache,
     ) {
         if self.pass_nodes.is_empty() {
@@ -51,20 +49,20 @@ impl FrameGraph {
 
         // self.compiled_pipelines(pipeline_cache);
 
-        self.generate_device_passes(creator, transient_resource_cache);
+        self.generate_device_passes(device, transient_resource_cache);
     }
 
     fn generate_device_passes(
         &mut self,
-        creator: &impl ResourceCreator,
+        device: &Device,
         transient_resource_cache: &mut TransientResourceCache,
     ) {
-        let mut resource_table: ResourceTable = ResourceTable::default();
-
         let mut device_passes = vec![];
 
         for index in 0..self.pass_nodes.len() {
             let pass_node_handle = self.pass_nodes[index].handle;
+
+            let mut resource_table: ResourceTable = ResourceTable::default();
 
             for resource_handle in self
                 .get_pass_node(&pass_node_handle)
@@ -72,17 +70,16 @@ impl FrameGraph {
                 .clone()
             {
                 let resource = self.get_resource(&resource_handle);
-                resource_table.request_resources(resource, creator, transient_resource_cache);
+                resource_table.request_resources(resource, device, transient_resource_cache);
             }
 
-            let mut device_pass = DevicePass::default();
+            let mut device_pass = DevicePass::new(resource_table);
 
             device_pass.extra(self, pass_node_handle);
 
             device_passes.push(device_pass);
         }
 
-        self.resource_table = Some(resource_table);
         self.device_passes = Some(device_passes);
     }
 
@@ -173,7 +170,7 @@ impl FrameGraph {
     ) where
         Data: Default + 'static,
         Setup: FnOnce(&mut PassNodeBuilder, &mut Data) + 'static,
-        Execute: FnOnce(&Data, &mut ResourceTable) + 'static,
+        Execute: FnOnce(&Data, &mut RenderContext) + 'static,
     {
         let pass = CallbackPass::new(setup, execute);
 

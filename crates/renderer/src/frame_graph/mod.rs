@@ -8,6 +8,7 @@ pub mod resource;
 pub mod resource_node;
 pub mod resource_table;
 pub mod transient_resource_cache;
+pub mod render_context;
 
 pub use callback_pass::*;
 pub use device_pass::*;
@@ -18,3 +19,5 @@ pub use pass_node_builder::*;
 pub use resource::*;
 pub use resource_node::*;
 pub use transient_resource_cache::*;
+pub use render_context::*;
+pub use resource_table::*;

@@ -38,22 +38,14 @@ impl RenderPipeline for DeferredRenderPipeline {
             for flow in self.flows.iter() {
                 flow.setup(&mut context);
             }
-
-            self.fg
-                .compile(&self.device, &mut self.transient_resource_cache);
-
-            self.fg
-                .execute(&self.device, &mut self.transient_resource_cache);
-
-            self.fg.reset();
         }
-    }
 
-    fn activate(&mut self) {
-        todo!()
-    }
+        self.fg
+            .compile(&self.device, &mut self.transient_resource_cache);
 
-    fn on_global_pipeline_state_changed(&mut self) {
-        todo!()
+        self.fg
+            .execute(&self.device, &mut self.transient_resource_cache);
+
+        self.fg.reset();
     }
 }
