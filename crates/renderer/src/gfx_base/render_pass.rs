@@ -1,55 +1,43 @@
+use crate::{define_atomic_id, define_gfx_type};
+use downcast_rs::Downcast;
 use std::fmt::Debug;
 
-use downcast_rs::{Downcast, impl_downcast};
+use crate::frame_graph::RenderContext;
 
-pub trait RenderPassTrait: 'static + Sync + Send + Debug + Clone {
-    fn new(info: RenderPassInfo) -> Self;
-}
+define_atomic_id!(RenderPassId);
 
-pub trait ErasedRenderPassTrait: 'static + Sync + Send + Debug + Downcast {
-    fn clone_value(&self) -> Box<dyn ErasedRenderPassTrait>;
-}
-
-impl<T> ErasedRenderPassTrait for T
-where
-    T: RenderPassTrait,
-{
-    fn clone_value(&self) -> Box<dyn ErasedRenderPassTrait> {
-        Box::new(self.clone())
-    }
-}
-
-impl_downcast!(ErasedRenderPassTrait);
-
+#[derive(Default, Clone, Debug)]
 pub struct RenderPassInfo {}
 
 impl RenderPassInfo {
     pub fn new() -> Self {
-        RenderPassInfo {}
+        RenderPassInfo::default()
     }
 }
 
-#[derive(Debug)]
-pub struct RenderPass {
-    value: Box<dyn ErasedRenderPassTrait>,
+pub trait RenderPassTrait: 'static + Debug {
+    fn do_init(&mut self, render_context: &RenderContext);
 }
 
-impl Clone for RenderPass {
-    fn clone(&self) -> Self {
-        RenderPass {
-            value: self.value.clone_value(),
-        }
+pub trait ErasedRenderPassTrait: 'static + Debug + Downcast {
+    fn do_init(&mut self, render_context: &RenderContext);
+}
+
+impl<T: RenderPassTrait> ErasedRenderPassTrait for T {
+    fn do_init(&mut self, render_context: &RenderContext) {
+        <T as RenderPassTrait>::do_init(self, render_context);
     }
 }
+
+define_gfx_type!(
+    RenderPass,
+    RenderPassId,
+    RenderPassTrait,
+    ErasedRenderPassTrait
+);
 
 impl RenderPass {
-    pub fn from_info<T: RenderPassTrait>(info: RenderPassInfo) -> Self {
-        RenderPass::new(T::new(info))
-    }
-
-    pub fn new<T: RenderPassTrait>(value: T) -> Self {
-        Self {
-            value: Box::new(value),
-        }
+    pub fn do_init(&mut self, render_context: &RenderContext) {
+        self.value.do_init(render_context);
     }
 }

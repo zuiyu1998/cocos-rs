@@ -54,22 +54,23 @@ impl DevicePass {
         for logic_pass in self.logic_passes.iter_mut() {
             logic_pass.pass.execute(render_context);
 
-            logic_pass.release_resources(&mut render_context.resource_table, render_context.transient_resource_cache);
+            logic_pass.release_resources(
+                &mut render_context.resource_table,
+                render_context.transient_resource_cache,
+            );
         }
 
         self.end(render_context);
     }
 
     pub fn begin(&mut self, render_context: &mut RenderContext) {
-        swap(
-            &mut self.resource_table,
-            &mut render_context.resource_table,
-        );
+        swap(&mut self.resource_table, &mut render_context.resource_table);
 
         let mut command_buffer = render_context.device().create_command_buffer();
 
         let render_pass_info: RenderPassInfo = RenderPassInfo::new();
-        command_buffer.begin_render_pass(render_pass_info);
+        let render_pass = render_context.device().create_render_pass(render_pass_info);
+        command_buffer.begin_render_pass(render_pass);
 
         render_context.set_cb(command_buffer);
     }

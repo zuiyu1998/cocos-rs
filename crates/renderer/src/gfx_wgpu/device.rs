@@ -13,4 +13,8 @@ impl DeviceTrait for WgpuDevice {
     fn submit(&self, _command_buffers: Vec<crate::CommandBuffer>) {
         todo!()
     }
+    
+    fn create_render_pass(&self, _desc: crate::RenderPassInfo) -> crate::RenderPass {
+        todo!()
+    }
 }
