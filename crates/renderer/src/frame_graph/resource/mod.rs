@@ -1,13 +1,15 @@
 mod texture;
+mod swap_chain;
 
-use crate::{Device, Texture, TextureDescriptor, gfx_base::TypeHandle};
+use crate::{gfx_base::TypeHandle, Device, SwapChain, SwapChainInfo, Texture, TextureInfo};
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 use super::PassNode;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum AnyFGResourceDescriptor {
-    Texture(TextureDescriptor),
+    Texture(TextureInfo),
+    SwapChain(SwapChainInfo)
 }
 
 impl Device {
@@ -19,11 +21,14 @@ impl Device {
 #[derive(Debug)]
 pub enum AnyFGResource {
     OwnedTexture(Texture),
+    OwnedSwapChain(SwapChain),
     ImportedTexture(Arc<Texture>),
 }
 
 pub trait FGResource: 'static + Debug {
     type Descriptor: FGResourceDescriptor;
+
+    fn borrow_resource(res: &AnyFGResource) -> &Self;
 }
 
 pub trait FGResourceDescriptor:

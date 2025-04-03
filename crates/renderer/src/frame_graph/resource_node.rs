@@ -30,6 +30,7 @@ impl ResourceNode {
     }
 }
 
+#[derive(Debug)]
 pub struct ResourceNodeHandle<ResourceType> {
     resource_node_handle: TypeHandle<ResourceNode>,
     resource_handle: TypeHandle<VirtualResource>,

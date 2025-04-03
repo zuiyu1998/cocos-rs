@@ -1,6 +1,6 @@
 use crate::{CommandBuffer, Device};
 
-use super::{ResourceTable, TransientResourceCache};
+use super::{FGResource, GpuRead, ResourceRef, ResourceTable, TransientResourceCache};
 
 pub struct RenderContext<'a> {
     device: &'a Device,
@@ -10,6 +10,14 @@ pub struct RenderContext<'a> {
 }
 
 impl<'a> RenderContext<'a> {
+
+    pub fn get_resource<ResourceType: FGResource>(
+        &self,
+        handle: &ResourceRef<ResourceType, GpuRead>,
+    ) -> Option<&ResourceType> {
+        self.resource_table.get_resource(&handle.resource_handle())
+    }
+
     pub fn device(&self) -> &Device {
         self.device
     }
@@ -22,12 +30,15 @@ impl<'a> RenderContext<'a> {
         self.cb.take()
     }
 
-    pub fn new(device: &'a Device, transient_resource_cache: &'a mut TransientResourceCache) -> Self {
+    pub fn new(
+        device: &'a Device,
+        transient_resource_cache: &'a mut TransientResourceCache,
+    ) -> Self {
         Self {
             device,
             cb: None,
             resource_table: Default::default(),
-            transient_resource_cache
+            transient_resource_cache,
         }
     }
 }

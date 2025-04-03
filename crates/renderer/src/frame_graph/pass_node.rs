@@ -8,21 +8,30 @@ pub trait GpuViewType {
     const IS_WRITABLE: bool;
 }
 
+#[derive(Debug)]
 pub struct GpuRead;
 
 impl GpuViewType for GpuRead {
     const IS_WRITABLE: bool = false;
 }
 
+#[derive(Debug)]
 pub struct GpuWrite;
 
 impl GpuViewType for GpuWrite {
     const IS_WRITABLE: bool = true;
 }
 
+#[derive(Debug)]
 pub struct ResourceRef<ResourceType, ViewType> {
     handle: ResourceNodeHandle<ResourceType>,
     _marker: PhantomData<ViewType>,
+}
+
+impl<ResourceType, ViewType>  Clone for ResourceRef<ResourceType, ViewType>  {
+    fn clone(&self) -> Self {
+        Self { handle: self.handle.clone(), _marker: PhantomData }
+    }
 }
 
 impl<ResourceType, ViewType> ResourceRef<ResourceType, ViewType> {

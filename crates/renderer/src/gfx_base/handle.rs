@@ -1,9 +1,17 @@
-use std::{any::TypeId, hash::Hash, marker::PhantomData};
+use std::{any::TypeId, fmt::Debug, hash::Hash, marker::PhantomData};
 
 //类型索引
 pub struct TypeHandle<T> {
     index: usize,
     _marker: PhantomData<T>,
+}
+
+impl<T> Debug for TypeHandle<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TypeHandle")
+            .field("index", &self.index)
+            .finish()
+    }
 }
 
 impl<T> Default for TypeHandle<T> {

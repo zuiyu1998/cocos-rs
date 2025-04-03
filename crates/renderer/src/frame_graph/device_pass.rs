@@ -70,7 +70,7 @@ impl DevicePass {
 
         let render_pass_info: RenderPassInfo = RenderPassInfo::new();
         let render_pass = render_context.device().create_render_pass(render_pass_info);
-        command_buffer.begin_render_pass(render_pass);
+        command_buffer.begin_render_pass(render_context.device(), render_pass);
 
         render_context.set_cb(command_buffer);
     }

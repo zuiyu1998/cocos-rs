@@ -5,6 +5,9 @@ mod handle;
 mod texture;
 mod render_pass;
 mod macros;
+mod texture_view;
+mod color_attachment;
+mod swap_chain;
 
 pub use command_buffer::*;
 pub use common::*;
@@ -12,3 +15,6 @@ pub use device::*;
 pub use handle::*;
 pub use texture::*;
 pub use render_pass::*;
+pub use texture_view::*;
+pub use color_attachment::*;
+pub use swap_chain::*;
