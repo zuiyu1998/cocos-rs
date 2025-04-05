@@ -1,6 +1,6 @@
 use crate::{CommandBuffer, Device};
 
-use super::{FGResource, GpuRead, ResourceRef, ResourceTable, TransientResourceCache};
+use super::{FGResource, GpuRead, ResourceNodeRef, ResourceTable, TransientResourceCache};
 
 pub struct RenderContext<'a> {
     device: &'a Device,
@@ -13,7 +13,7 @@ impl<'a> RenderContext<'a> {
 
     pub fn get_resource<ResourceType: FGResource>(
         &self,
-        handle: &ResourceRef<ResourceType, GpuRead>,
+        handle: &ResourceNodeRef<ResourceType, GpuRead>,
     ) -> Option<&ResourceType> {
         self.resource_table.get_resource(&handle.resource_handle())
     }

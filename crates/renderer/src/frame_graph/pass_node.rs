@@ -23,18 +23,21 @@ impl GpuViewType for GpuWrite {
 }
 
 #[derive(Debug)]
-pub struct ResourceRef<ResourceType, ViewType> {
+pub struct ResourceNodeRef<ResourceType, ViewType> {
     handle: ResourceNodeHandle<ResourceType>,
     _marker: PhantomData<ViewType>,
 }
 
-impl<ResourceType, ViewType>  Clone for ResourceRef<ResourceType, ViewType>  {
+impl<ResourceType, ViewType> Clone for ResourceNodeRef<ResourceType, ViewType> {
     fn clone(&self) -> Self {
-        Self { handle: self.handle.clone(), _marker: PhantomData }
+        Self {
+            handle: self.handle.clone(),
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<ResourceType, ViewType> ResourceRef<ResourceType, ViewType> {
+impl<ResourceType, ViewType> ResourceNodeRef<ResourceType, ViewType> {
     pub fn resource_node_handle(&self) -> TypeHandle<ResourceNode> {
         self.handle.resource_node_handle()
     }
@@ -69,7 +72,7 @@ impl PassNode {
         &mut self,
         graph: &mut FrameGraph,
         resource_node_handle: ResourceNodeHandle<ResourceType>,
-    ) -> ResourceRef<ResourceType, GpuWrite> {
+    ) -> ResourceNodeRef<ResourceType, GpuWrite> {
         let resource_handle = graph
             .get_resource_node(&resource_node_handle.resource_node_handle())
             .resource_handle;
@@ -83,7 +86,7 @@ impl PassNode {
 
         self.writes.push(new_resource_node_handle);
 
-        ResourceRef::new(ResourceNodeHandle::new(
+        ResourceNodeRef::new(ResourceNodeHandle::new(
             new_resource_node_handle,
             resource_handle,
         ))
@@ -93,7 +96,7 @@ impl PassNode {
         &mut self,
         graph: &FrameGraph,
         resource_node_handle: ResourceNodeHandle<ResourceType>,
-    ) -> ResourceRef<ResourceType, GpuRead> {
+    ) -> ResourceNodeRef<ResourceType, GpuRead> {
         let resource_node_handle = resource_node_handle.resource_node_handle();
 
         if !self.reads.contains(&resource_node_handle) {
@@ -104,7 +107,7 @@ impl PassNode {
             .get_resource_node(&resource_node_handle)
             .resource_handle;
 
-        ResourceRef::new(ResourceNodeHandle::new(
+        ResourceNodeRef::new(ResourceNodeHandle::new(
             resource_node_handle,
             resource_handle,
         ))

@@ -56,11 +56,11 @@ pub fn create_window(event_loop: &::winit::event_loop::ActiveEventLoop) -> Windo
         .unwrap()
 }
 
-pub type FutureRenderResources = Arc<Mutex<Option<Device>>>;
+pub type FutureRenderResources = Arc<Mutex<Option<Arc<Device>>>>;
 
 pub fn initialize_graphics_context(
     event_loop: &::winit::event_loop::ActiveEventLoop,
-) -> (Device, Arc<Window>) {
+) -> (Arc<Device>, Arc<Window>) {
     let window = Arc::new(create_window(event_loop));
     let future_render_resources_wrapper: FutureRenderResources = Arc::new(Mutex::new(None));
 
@@ -112,7 +112,7 @@ pub fn initialize_graphics_context(
             .unwrap();
         surface.configure(&device, &config);
 
-        let device = Device::new(WgpuDevice { device });
+        let device = Arc::new(Device::new(WgpuDevice { device }));
 
         let mut guard = future_render_resources_wrapper_clone.lock().unwrap();
         *guard = Some(device)

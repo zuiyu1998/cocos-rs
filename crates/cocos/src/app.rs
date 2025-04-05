@@ -43,4 +43,7 @@ impl App {
         let app = core::mem::replace(self, App::empty());
         (runner)(app)
     }
+
+    pub fn render(&mut self) {
+    }
 }

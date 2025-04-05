@@ -2,7 +2,7 @@ use crate::gfx_base::TypeHandle;
 
 use super::{
     FGResource, FGResourceDescriptor, FrameGraph, GpuRead, GpuWrite, PassNode, ResourceNodeHandle,
-    ResourceRef, TypeEquals,
+    ResourceNodeRef, TypeEquals,
 };
 
 pub struct PassNodeBuilder<'a> {
@@ -41,7 +41,7 @@ impl<'a> PassNodeBuilder<'a> {
     pub fn read<ResourceType>(
         &mut self,
         resource_node_handle: ResourceNodeHandle<ResourceType>,
-    ) -> ResourceRef<ResourceType, GpuRead> {
+    ) -> ResourceNodeRef<ResourceType, GpuRead> {
         self.pass_node
             .as_mut()
             .unwrap()
@@ -51,7 +51,7 @@ impl<'a> PassNodeBuilder<'a> {
     pub fn write<ResourceType>(
         &mut self,
         resource_node_handle: ResourceNodeHandle<ResourceType>,
-    ) -> ResourceRef<ResourceType, GpuWrite> {
+    ) -> ResourceNodeRef<ResourceType, GpuWrite> {
         self.pass_node
             .as_mut()
             .unwrap()
